@@ -126,6 +126,18 @@
   .legend{display:flex;gap:16px;flex-wrap:wrap;font-size:11px;color:var(--muted);margin-top:12px;padding-top:12px;border-top:1px dashed var(--line);}
   .legend .tl{font-size:11px;}
 
+  /* Saved positions accordion */
+  .pos-card{background:var(--panel-2);border:1px solid var(--line);border-radius:6px;margin-bottom:10px;overflow:hidden;}
+  .pos-card-header{display:flex;justify-content:space-between;align-items:center;padding:12px 14px;cursor:pointer;}
+  .pos-card-header:hover{background:rgba(255,255,255,0.03);}
+  .pos-card-title{display:flex;align-items:center;gap:10px;}
+  .pos-card-arrow{display:inline-block;color:var(--muted);transition:transform .18s ease;font-size:10px;}
+  .pos-card-arrow.open{transform:rotate(90deg);}
+  .pos-card-remove{background:transparent;border:none;color:var(--muted);cursor:pointer;font-size:15px;padding:2px 8px;line-height:1;}
+  .pos-card-remove:hover{color:var(--bear);}
+  .pos-card-body{display:none;padding:4px 14px 14px;border-top:1px solid var(--line);}
+  .pos-card-body.open{display:block;}
+
   .ma-row{display:flex;justify-content:space-between;font-size:12px;padding:6px 0;border-bottom:1px dashed var(--line);}
   .ma-row .k{color:var(--muted);}
   .chart-wrap{margin-top:14px;}
@@ -397,6 +409,22 @@
       <div class="notice show" id="posAction" style="margin-top:14px;"></div>
     </div>
     <div class="empty" id="posEmpty">Sisesta oma positsiooni andmed ülal ja vajuta "Analüüsi positsiooni".</div>
+
+    <div style="margin-top:24px;padding-top:16px;border-top:1px dashed var(--line);">
+      <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:12px;">
+        <div>
+          <div class="eyebrow">Salvestatud positsioonid</div>
+          <div style="font-size:11px;color:var(--muted);margin-top:2px;">Jälgi kõiki avatud positsioone korraga, ilma et peaksid iga kord uuesti sisestama.</div>
+        </div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;">
+          <button class="btn btn-ghost" id="savePositionBtn">+ Salvesta praegune positsioon</button>
+          <button class="btn btn-ghost" id="refreshAllPositionsBtn">Värskenda kõik</button>
+        </div>
+      </div>
+      <div class="progress" id="positionsProgress"></div>
+      <div id="positionsList"></div>
+      <div class="empty" id="positionsEmpty">Sul pole veel ühtegi positsiooni salvestatud. Täida ülal olevad väljad ja vajuta "+ Salvesta praegune positsioon".</div>
+    </div>
   </section>
 
   <!-- BLOCK 4: POSITION SIZING -->
@@ -872,7 +900,7 @@
 
   // ---------- Scanner analysis ----------
   function analyze(bars){
-    if(bars.length < 25) return null;
+    if(bars.length < 45) return null; // vajab piisavalt ajalugu laiema (kuni 2 kuu) konsolideerumisakna jaoks
     const closes = bars.map(b=>b.c), highs = bars.map(b=>b.h), lows = bars.map(b=>b.l), vols = bars.map(b=>b.v);
     const n = bars.length;
     const last = bars[n-1];
@@ -905,11 +933,16 @@
       if(!hs.length) return null;
       return Math.max(...hs) - Math.min(...ls);
     }
-    const range10 = rangeOf(10,0);
-    const range20prev = rangeOf(20,10);
-    const narrowing = (range10!==null && range20prev!==null) ? (range10 < range20prev) : false;
+    // Kullamägi enda sõnul: "konsolideerumisfaas on tavaliselt 2 nädalat kuni 2 kuud" (~10-40 kauplemispäeva).
+    // Varem võrdlesime ainult viimast 10 vs eelmist 10 päeva (2 nädalat kokku) — see nägi ainult kõige
+    // lühemaid konsolideerumisi. Nüüd võrdleme viimast 20 vs eelmist 20 päeva (kuni ~2 kuud kokku),
+    // et katta kogu tema kirjeldatud vahemik, mitte ainult selle kiireimat otsa.
+    const range20 = rangeOf(20,0);
+    const range40prev = rangeOf(40,20);
+    const narrowing = (range20!==null && range40prev!==null) ? (range20 < range40prev) : false;
 
-    const lowsTail = lows.slice(-8);
+    // Kõrgemate madalpunktide kontroll laiendatud 8 päevalt 20 päevale, et sobituda sama laiema aknaga.
+    const lowsTail = lows.slice(-20);
     let higherLowScore = 0;
     for(let i=1;i<lowsTail.length;i++){ if(lowsTail[i] >= lowsTail[i-1]*0.995) higherLowScore++; }
     const higherLows = higherLowScore >= (lowsTail.length-1)*0.6;
@@ -1088,6 +1121,68 @@
     $('posVerdictSub').textContent = sub;
   }
 
+  // Puhas arvutusfunktsioon (ei puuduta DOM-i) — kasutatakse nii ühekordse
+  // analüüsi vormis kui salvestatud positsioonide akordionis, et vältida koodi dubleerimist.
+  function computePositionAnalysis(bars, entry, dateStr, initialStop, maPeriod, partialSold){
+    if(bars.length < maPeriod + 1) throw new Error('Liiga vähe andmepunkte ' + maPeriod + '-päeva SMA jaoks.');
+
+    const closes = bars.map(b=>b.c);
+    const lastBar = bars[bars.length-1];
+    const currentPrice = lastBar.c;
+
+    const R = entry - initialStop;
+    if(R <= 0) throw new Error('Algne stop peab olema madalam kui ostuhind (R peab olema positiivne).');
+
+    const profitPerShare = currentPrice - entry;
+    const profitR = profitPerShare / R;
+    const target2R = entry + 2*R;
+    const target3R = entry + 3*R;
+
+    const entryDate = new Date(dateStr + 'T00:00:00');
+    const lastDate = new Date(lastBar.t);
+    const daysHeld = businessDaysBetween(entryDate, lastDate);
+
+    const maValue = sma(closes, maPeriod);
+    const activeStop = partialSold ? Math.max(entry, initialStop) : initialStop;
+
+    const closeBelowMA = currentPrice < maValue;
+    const closeBelowStop = currentPrice < activeStop;
+    const partialWindowReached = (daysHeld >= 3 && daysHeld <= 5);
+    const partialProfitReached = profitR >= 2;
+    const partialDue = !partialSold && (partialWindowReached || partialProfitReached);
+    // Trailing MA on väljumistrigger ainult trailing-faasis (pärast osalist müüki).
+    const maExitApplies = partialSold && closeBelowMA;
+
+    let kind, label, sub, actionHtml;
+    if(closeBelowStop || maExitApplies){
+      kind = 'bear'; label = 'VÄLJU';
+      sub = closeBelowStop
+        ? 'Sulgemishind on all su stopist ($' + activeStop.toFixed(2) + ') — sule positsioon vastavalt reeglile.'
+        : 'Sulgemishind ($' + currentPrice.toFixed(2) + ') on allpool ' + maPeriod + 'p SMA-d ($' + maValue.toFixed(2) + ') pärast osalist müüki — trailing-stop trigger on käivitunud.';
+      actionHtml = '<b>Tegevus:</b> sule positsioon (või ülejäänud osa) täna, kui sulgemishind kinnitab allpool taset. See on distsipliini koht, kus enamik kauplejaid reegleid eirab.';
+    } else if(partialDue){
+      kind = 'neutral'; label = 'MÜÜ OSA NÜÜD';
+      sub = partialWindowReached
+        ? 'Oled hoidnud ' + daysHeld + ' tööpäeva (3-5 päeva aken) — aeg realiseerida osa kasumist.'
+        : 'Oled jõudnud ' + profitR.toFixed(1) + 'R kasumini (üle 2R läve, lisandus originaalreeglitele) — aeg realiseerida osa kasumist.';
+      actionHtml = '<b>Tegevus:</b> müü 1/3 kuni 1/2 positsioonist praegu, seejärel liiguta stop breakeven\'ile ($' + entry.toFixed(2) + '). Märgi allolev linnuke "juba müüdud" ja analüüsi uuesti, et jälgida ülejäänud osa ' + maPeriod + 'p SMA trailinguga.';
+    } else if(partialSold){
+      kind = 'bull'; label = 'HOIA — TRAIL';
+      sub = 'Osa on juba müüdud, stop on breakeven\'il. Ülejäänud positsiooni jälgitakse ' + maPeriod + 'p SMA-ga ($' + maValue.toFixed(2) + ') — väljud, kui sulgemishind langeb sellest allapoole.';
+      actionHtml = '<b>Tegevus:</b> hoia ülejäänud positsiooni. Kontrolli iga päev, kas sulgemishind on ' + maPeriod + 'p SMA all — see on sinu järgmine väljumistrigger.';
+    } else if(profitR < 0){
+      kind = 'neutral'; label = 'HOIA — KAHJUMIS';
+      sub = 'Positsioon on hetkel ' + profitR.toFixed(2) + 'R kahjumis, aga pole veel jõudnud stopini ($' + activeStop.toFixed(2) + '). Trailing MA ($' + maValue.toFixed(2) + ') ei ole veel asjakohane, kuna positsioon pole olnud kasumis.';
+      actionHtml = '<b>Tegevus:</b> hoia, kuni hind kas taastub või langeb allapoole aktiivset stopi ($' + activeStop.toFixed(2) + '). Ainuke kehtiv väljumistrigger praegu on see stop-tase.';
+    } else {
+      kind = 'bull'; label = 'HOIA';
+      sub = 'Tehing areneb plaanipäraselt. Kasum on ' + profitR.toFixed(2) + 'R, veel pole jõutud osalise müügi hetkeni (3-5 päeva või 2R).';
+      actionHtml = '<b>Tegevus:</b> hoia täies mahus, jälgi stopi taset ($' + activeStop.toFixed(2) + ') ja jälgi, millal jõuad 3-5 päeva või 2R kasumi lävendini.';
+    }
+
+    return {currentPrice, R, profitR, profitPerShare, target2R, target3R, daysHeld, maValue, activeStop, kind, label, sub, actionHtml};
+  }
+
   async function runExitAnalysis(){
     const provider = providerSel.value;
     const key = apikeyInput.value.trim();
@@ -1116,70 +1211,20 @@
     $('posAction').textContent = '';
 
     try{
-      const bars = provider === 'polygon' ? await polygonDaily(symbol, key, 90) : await alphaDaily(symbol, key);
-      if(bars.length < maPeriod + 1) throw new Error('Liiga vähe andmepunkte ' + maPeriod + '-päeva SMA jaoks.');
+      const bars = provider === 'polygon' ? await polygonDaily(symbol, key, 90) : await alphaDaily(symbol, key, false);
+      const r = computePositionAnalysis(bars, entry, dateStr, initialStop, maPeriod, partialSold);
 
-      const closes = bars.map(b=>b.c);
-      const lastBar = bars[bars.length-1];
-      const currentPrice = lastBar.c;
+      $('posPrice').textContent = '$' + r.currentPrice.toFixed(2);
+      $('posR').textContent = '$' + r.R.toFixed(2);
+      $('posProfitR').textContent = (r.profitR>=0?'+':'') + r.profitR.toFixed(2) + 'R ($' + r.profitPerShare.toFixed(2) + ')';
+      $('posTarget2R').textContent = '$' + r.target2R.toFixed(2) + (r.currentPrice>=r.target2R ? ' ✓ jõutud' : '');
+      $('posTarget3R').textContent = '$' + r.target3R.toFixed(2) + (r.currentPrice>=r.target3R ? ' ✓ jõutud' : '');
+      $('posDays').textContent = r.daysHeld + ' tööpäeva';
+      $('posMAValue').textContent = '$' + r.maValue.toFixed(2);
+      $('posActiveStop').textContent = '$' + r.activeStop.toFixed(2) + (partialSold ? ' (breakeven)' : ' (algne stop)');
 
-      const R = entry - initialStop; // risk per share in $
-      if(R <= 0) throw new Error('Algne stop peab olema madalam kui ostuhind (R peab olema positiivne).');
-
-      const profitPerShare = currentPrice - entry;
-      const profitR = profitPerShare / R;
-
-      const target2R = entry + 2*R;
-      const target3R = entry + 3*R;
-
-      const entryDate = new Date(dateStr + 'T00:00:00');
-      const lastDate = new Date(lastBar.t);
-      const daysHeld = businessDaysBetween(entryDate, lastDate);
-
-      const maValue = sma(closes, maPeriod);
-      const activeStop = partialSold ? Math.max(entry, initialStop) : initialStop;
-
-      $('posPrice').textContent = '$' + currentPrice.toFixed(2);
-      $('posR').textContent = '$' + R.toFixed(2);
-      $('posProfitR').textContent = (profitR>=0?'+':'') + profitR.toFixed(2) + 'R ($' + profitPerShare.toFixed(2) + ')';
-      $('posTarget2R').textContent = '$' + target2R.toFixed(2) + (currentPrice>=target2R ? ' ✓ jõutud' : '');
-      $('posTarget3R').textContent = '$' + target3R.toFixed(2) + (currentPrice>=target3R ? ' ✓ jõutud' : '');
-      $('posDays').textContent = daysHeld + ' tööpäeva';
-      $('posMAValue').textContent = '$' + maValue.toFixed(2);
-      $('posActiveStop').textContent = '$' + activeStop.toFixed(2) + (partialSold ? ' (breakeven)' : ' (algne stop)');
-
-      // ---- Decision logic ----
-      const closeBelowMA = currentPrice < maValue;
-      const closeBelowStop = currentPrice < activeStop;
-      const partialWindowReached = (daysHeld >= 3 && daysHeld <= 5);
-      const partialProfitReached = profitR >= 2;
-      const partialDue = !partialSold && (partialWindowReached || partialProfitReached);
-
-      // TÄHTIS: trailing MA on väljumistrigger AINULT pärast osalist müüki (trailing-faasis).
-      // Enne seda on ainus kehtiv trigger aktiivne stop — MA-l alla olemine kahjumis positsioonis,
-      // mis pole kunagi kasumis olnud, EI ole Kullamägi meetodi järgi väljumissignaal.
-      const maExitApplies = partialSold && closeBelowMA;
-
-      if(closeBelowStop || maExitApplies){
-        setPosVerdict('bear', 'VÄLJU', closeBelowStop
-          ? 'Sulgemishind on all su stopist ($' + activeStop.toFixed(2) + ') — sule positsioon vastavalt reeglile.'
-          : 'Sulgemishind ($' + currentPrice.toFixed(2) + ') on allpool ' + maPeriod + 'p SMA-d ($' + maValue.toFixed(2) + ') pärast osalist müüki — trailing-stop trigger on käivitunud.');
-        $('posAction').innerHTML = '<b>Tegevus:</b> sule positsioon (või ülejäänud osa) täna, kui sulgemishind kinnitab allpool taset. See on distsipliini koht, kus enamik kauplejaid reegleid eirab.';
-      } else if(partialDue){
-        setPosVerdict('neutral', 'MÜÜ OSA NÜÜD', partialWindowReached
-          ? 'Oled hoidnud ' + daysHeld + ' tööpäeva (3-5 päeva aken) — aeg realiseerida osa kasumist.'
-          : 'Oled jõudnud ' + profitR.toFixed(1) + 'R kasumini (üle 2R läve, lisandus originaalreeglitele) — aeg realiseerida osa kasumist.');
-        $('posAction').innerHTML = '<b>Tegevus:</b> müü 1/3 kuni 1/2 positsioonist praegu, seejärel liiguta stop breakeven\'ile ($' + entry.toFixed(2) + '). Märgi allolev linnuke "juba müüdud" ja analüüsi uuesti, et jälgida ülejäänud osa ' + maPeriod + 'p SMA trailinguga.';
-      } else if(partialSold){
-        setPosVerdict('bull', 'HOIA — TRAIL', 'Osa on juba müüdud, stop on breakeven\'il. Ülejäänud positsiooni jälgitakse ' + maPeriod + 'p SMA-ga ($' + maValue.toFixed(2) + ') — väljud, kui sulgemishind langeb sellest allapoole.');
-        $('posAction').innerHTML = '<b>Tegevus:</b> hoia ülejäänud positsiooni. Kontrolli iga päev, kas sulgemishind on ' + maPeriod + 'p SMA all — see on sinu järgmine väljumistrigger.';
-      } else if(profitR < 0){
-        setPosVerdict('neutral', 'HOIA — KAHJUMIS', 'Positsioon on hetkel ' + profitR.toFixed(2) + 'R kahjumis, aga pole veel jõudnud stopini ($' + activeStop.toFixed(2) + '). Trailing MA ($' + maValue.toFixed(2) + ') ei ole veel asjakohane, kuna positsioon pole olnud kasumis.');
-        $('posAction').innerHTML = '<b>Tegevus:</b> hoia, kuni hind kas taastub või langeb allapoole aktiivset stopi ($' + activeStop.toFixed(2) + '). Ainuke kehtiv väljumistrigger praegu on see stop-tase.';
-      } else {
-        setPosVerdict('bull', 'HOIA', 'Tehing areneb plaanipäraselt. Kasum on ' + profitR.toFixed(2) + 'R, veel pole jõutud osalise müügi hetkeni (3-5 päeva või 2R).');
-        $('posAction').innerHTML = '<b>Tegevus:</b> hoia täies mahus, jälgi stopi taset ($' + activeStop.toFixed(2) + ') ja jälgi, millal jõuad 3-5 päeva või 2R kasumi lävendini.';
-      }
+      setPosVerdict(r.kind, r.label, r.sub);
+      $('posAction').innerHTML = r.actionHtml;
     }catch(e){
       setPosVerdict('idle', 'VIGA', e.message);
       $('posAction').textContent = '';
@@ -1187,6 +1232,164 @@
   }
 
   $('posBtn').addEventListener('click', runExitAnalysis);
+
+  // ---------- Saved positions accordion (persisted in localStorage) ----------
+  const POSITIONS_KEY = 'tape-and-base:positions';
+  let expandedPositionId = null;
+
+  function loadPositions(){
+    try{ return JSON.parse(localStorage.getItem(POSITIONS_KEY)) || []; }catch(e){ return []; }
+  }
+  function savePositionsToStorage(arr){
+    try{ localStorage.setItem(POSITIONS_KEY, JSON.stringify(arr)); }catch(e){ console.error('Positsioonide salvestamine ebaõnnestus:', e); }
+  }
+  function setPositionsProgress(text, pct){
+    $('positionsProgress').innerHTML = text + `<div class="bar"><i style="width:${pct}%"></i></div>`;
+  }
+
+  function renderPositionsList(){
+    const positions = loadPositions();
+    const container = $('positionsList');
+    container.innerHTML = '';
+
+    if(!positions.length){
+      $('positionsEmpty').style.display = 'block';
+      return;
+    }
+    $('positionsEmpty').style.display = 'none';
+
+    positions.forEach(p=>{
+      const isOpen = expandedPositionId === p.id;
+      const a = p.lastAnalysis;
+      const tlCls = a ? (a.kind==='bull'?'green':(a.kind==='bear'?'red':'yellow')) : 'yellow';
+      const tlLabel = a ? a.label : (p.lastError ? 'VIGA' : 'Pole analüüsitud');
+
+      let bodyHtml;
+      if(a){
+        bodyHtml = `
+          <div class="ma-row"><span class="k">Praegune hind</span><span>$${a.currentPrice.toFixed(2)}</span></div>
+          <div class="ma-row"><span class="k">R (risk aktsia kohta)</span><span>$${a.R.toFixed(2)}</span></div>
+          <div class="ma-row"><span class="k">Praegune kasum</span><span>${(a.profitR>=0?'+':'')+a.profitR.toFixed(2)}R ($${a.profitPerShare.toFixed(2)})</span></div>
+          <div class="ma-row"><span class="k">2R siht <i style="color:var(--amber);font-style:normal;font-size:10px;">LISANDUS</i></span><span>$${a.target2R.toFixed(2)}${a.currentPrice>=a.target2R?' ✓ jõutud':''}</span></div>
+          <div class="ma-row"><span class="k">3R siht <i style="color:var(--amber);font-style:normal;font-size:10px;">LISANDUS</i></span><span>$${a.target3R.toFixed(2)}${a.currentPrice>=a.target3R?' ✓ jõutud':''}</span></div>
+          <div class="ma-row"><span class="k">Päevi tehingus</span><span>${a.daysHeld} tööpäeva</span></div>
+          <div class="ma-row"><span class="k">Trailing MA (${p.maPeriod}p)</span><span>$${a.maValue.toFixed(2)}</span></div>
+          <div class="ma-row"><span class="k">Aktiivne stop</span><span>$${a.activeStop.toFixed(2)}${p.partialSold?' (breakeven)':' (algne stop)'}</span></div>
+          <div class="notice show" style="margin-top:10px;">${a.actionHtml}</div>
+        `;
+      } else {
+        bodyHtml = `<div style="color:var(--muted);font-size:12px;padding:10px 0;">${p.lastError || 'Vajuta "Värskenda kõik", et analüüsida.'}</div>`;
+      }
+
+      const card = document.createElement('div');
+      card.className = 'pos-card';
+      card.innerHTML = `
+        <div class="pos-card-header" data-id="${p.id}">
+          <div class="pos-card-title">
+            <span class="pos-card-arrow ${isOpen?'open':''}">▶</span>
+            <span class="tk">${p.symbol}</span>
+            <span class="tl"><span class="tl-dot ${tlCls}"></span><span class="tl-text ${tlCls}">${tlLabel}</span></span>
+          </div>
+          <button class="pos-card-remove" data-remove="${p.id}" title="Kustuta">✕</button>
+        </div>
+        <div class="pos-card-body ${isOpen?'open':''}">${bodyHtml}</div>
+      `;
+      container.appendChild(card);
+    });
+  }
+
+  $('positionsList').addEventListener('click', (e)=>{
+    const removeBtn = e.target.closest('[data-remove]');
+    if(removeBtn){
+      const id = removeBtn.dataset.remove;
+      const positions = loadPositions().filter(p=>p.id !== id);
+      savePositionsToStorage(positions);
+      if(expandedPositionId === id) expandedPositionId = null;
+      renderPositionsList();
+      return;
+    }
+    const header = e.target.closest('.pos-card-header');
+    if(header){
+      const id = header.dataset.id;
+      expandedPositionId = (expandedPositionId === id) ? null : id;
+      renderPositionsList();
+    }
+  });
+
+  $('savePositionBtn').addEventListener('click', async ()=>{
+    const symbol = $('posSymbol').value.trim().toUpperCase();
+    const entry = parseFloat($('posEntry').value);
+    const dateStr = $('posDate').value;
+    const initialStop = parseFloat($('posStop').value);
+    const maPeriod = parseInt($('posMA').value);
+    const partialSold = $('posPartialSold').checked;
+
+    if(!symbol || isNaN(entry) || !dateStr || isNaN(initialStop)){
+      alert('Täida kõik väljad enne salvestamist: ticker, ostuhind, ostukuupäev, algne stop.');
+      return;
+    }
+
+    const positions = loadPositions();
+    const newPos = {
+      id: Date.now().toString(36) + Math.random().toString(36).slice(2,7),
+      symbol, entry, dateStr, initialStop, maPeriod, partialSold,
+      lastAnalysis: null, lastError: null
+    };
+    positions.push(newPos);
+    savePositionsToStorage(positions);
+    expandedPositionId = newPos.id;
+    renderPositionsList();
+
+    // Analüüsi kohe värskelt, kui API võti on olemas
+    const key = apikeyInput.value.trim();
+    const provider = providerSel.value;
+    if(key && provider !== 'finnhub'){
+      try{
+        const bars = provider==='polygon' ? await polygonDaily(symbol, key, 90) : await alphaDaily(symbol, key, false);
+        newPos.lastAnalysis = computePositionAnalysis(bars, entry, dateStr, initialStop, maPeriod, partialSold);
+        newPos.lastError = null;
+      }catch(e){
+        newPos.lastAnalysis = null;
+        newPos.lastError = e.message;
+      }
+      const updated = loadPositions().map(p => p.id === newPos.id ? newPos : p);
+      savePositionsToStorage(updated);
+      renderPositionsList();
+    }
+  });
+
+  async function refreshAllPositions(){
+    const provider = providerSel.value;
+    const key = apikeyInput.value.trim();
+    if(!key){ alert('Sisesta oma API võti.'); return; }
+    if(provider === 'finnhub'){ alert('Finnhub tasuta tase ei anna ajaloolisi küünlaid — vali Polygon või Alpha Vantage.'); return; }
+
+    const refreshBtn = $('refreshAllPositionsBtn');
+    let positions = loadPositions();
+    if(!positions.length) return;
+
+    refreshBtn.disabled = true;
+    for(let i=0;i<positions.length;i++){
+      const pos = positions[i];
+      setPositionsProgress(`Värskendan ${pos.symbol}… (${i+1}/${positions.length})`, (i/positions.length)*100);
+      try{
+        const bars = provider==='polygon' ? await polygonDaily(pos.symbol, key, 90) : await alphaDaily(pos.symbol, key, false);
+        pos.lastAnalysis = computePositionAnalysis(bars, pos.entry, pos.dateStr, pos.initialStop, pos.maPeriod, pos.partialSold);
+        pos.lastError = null;
+      }catch(e){
+        pos.lastAnalysis = null;
+        pos.lastError = e.message;
+      }
+      if(i < positions.length-1) await sleep(DELAY_MS[provider]);
+    }
+    savePositionsToStorage(positions);
+    setPositionsProgress('Valmis.', 100);
+    renderPositionsList();
+    refreshBtn.disabled = false;
+  }
+
+  $('refreshAllPositionsBtn').addEventListener('click', refreshAllPositions);
+  renderPositionsList();
 
   // ---------- BLOCK 4: Position sizing ----------
   function setPsVerdict(kind, label, sub){
