@@ -1,0 +1,1165 @@
+<!DOCTYPE html>
+<html lang="et">
+<head>
+<meta charset="UTF-8" />
+<title>Tape &amp; Base — Momentum Scanner</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap');
+
+  :root{
+    --bg:#0B0D10;
+    --panel:#12151A;
+    --panel-2:#171B21;
+    --line:#262B33;
+    --text:#E7EAEE;
+    --muted:#7C8593;
+    --bull:#3ECF8E;
+    --bull-dim:#1B3A2C;
+    --bear:#FF5C6C;
+    --bear-dim:#3A1E22;
+    --amber:#F5B942;
+    --amber-dim:#3A2E12;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0;
+    background:var(--bg);
+    color:var(--text);
+    font-family:'IBM Plex Mono', monospace;
+    -webkit-font-smoothing:antialiased;
+  }
+  .wrap{max-width:1080px;margin:0 auto;padding:28px 20px 60px;}
+
+  .masthead{
+    display:flex;justify-content:space-between;align-items:flex-end;
+    border-bottom:1px solid var(--line);
+    padding-bottom:16px;margin-bottom:22px;
+    flex-wrap:wrap;gap:12px;
+  }
+  .masthead h1{
+    font-family:'Space Grotesk',sans-serif;
+    font-size:26px;font-weight:700;margin:0;letter-spacing:-0.01em;
+  }
+  .masthead h1 span{color:var(--amber);}
+  .masthead .tag{color:var(--muted);font-size:12px;margin-top:4px;letter-spacing:0.04em;text-transform:uppercase;}
+  .clock{font-size:12px;color:var(--muted);text-align:right;}
+
+  .config{
+    display:grid;grid-template-columns:1fr 1fr 1fr auto;gap:10px;
+    background:var(--panel);border:1px solid var(--line);border-radius:6px;
+    padding:14px;margin-bottom:24px;align-items:end;
+  }
+  @media (max-width:760px){.config{grid-template-columns:1fr 1fr;}}
+  .field label{display:block;font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:6px;}
+  .field select, .field input{
+    width:100%;background:var(--panel-2);border:1px solid var(--line);color:var(--text);
+    padding:9px 10px;border-radius:4px;font-family:inherit;font-size:13px;
+  }
+  .field select:focus, .field input:focus{outline:none;border-color:var(--amber);}
+  .btn{
+    background:var(--amber);color:#1a1305;border:none;border-radius:4px;
+    padding:10px 16px;font-family:inherit;font-weight:600;font-size:13px;
+    cursor:pointer;white-space:nowrap;
+  }
+  .btn:hover{filter:brightness(1.08);}
+  .btn:disabled{background:var(--line);color:var(--muted);cursor:not-allowed;}
+  .btn-ghost{
+    background:transparent;border:1px solid var(--line);color:var(--text);
+  }
+
+  .notice{
+    font-size:12px;line-height:1.5;color:var(--muted);
+    border-left:2px solid var(--amber);padding:8px 12px;margin-top:10px;
+    background:var(--amber-dim);color:#E7D9A8;grid-column:1/-1;border-radius:0 4px 4px 0;
+    display:none;
+  }
+  .notice.show{display:block;}
+
+  section.block{
+    background:var(--panel);border:1px solid var(--line);border-radius:6px;
+    padding:20px;margin-bottom:22px;
+  }
+  .block-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;}
+  .block-head .eyebrow{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:0.08em;}
+  .block-head h2{font-family:'Space Grotesk',sans-serif;font-size:17px;margin:2px 0 0;}
+
+  /* Sentiment block */
+  .sentiment-grid{display:grid;grid-template-columns:180px 1fr;gap:24px;align-items:center;}
+  @media (max-width:640px){.sentiment-grid{grid-template-columns:1fr;}}
+
+  .index-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;}
+  @media (max-width:800px){.index-grid{grid-template-columns:1fr;}}
+  .index-card{background:var(--panel-2);border:1px solid var(--line);border-radius:6px;padding:14px;}
+  .index-card-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;padding-bottom:8px;border-bottom:1px solid var(--line);}
+  .index-name{font-family:'Space Grotesk',sans-serif;font-weight:700;font-size:13px;}
+  .verdict{
+    text-align:center;padding:18px 10px;border-radius:6px;border:1px solid var(--line);
+  }
+  .verdict .light{
+    width:14px;height:14px;border-radius:50%;margin:0 auto 10px;
+  }
+  .verdict .label{font-family:'Space Grotesk',sans-serif;font-weight:700;font-size:18px;letter-spacing:0.02em;}
+  .verdict .sub{font-size:11px;color:var(--muted);margin-top:6px;}
+  .verdict.bull{border-color:var(--bull);}
+  .verdict.bull .light{background:var(--bull);box-shadow:0 0 14px var(--bull);}
+  .verdict.bull .label{color:var(--bull);}
+  .verdict.bear{border-color:var(--bear);}
+  .verdict.bear .light{background:var(--bear);box-shadow:0 0 14px var(--bear);}
+  .verdict.bear .label{color:var(--bear);}
+  .verdict.idle{border-color:var(--line);}
+  .verdict.idle .light{background:var(--muted);}
+  .verdict.idle .label{color:var(--muted);}
+  .verdict.neutral{border-color:var(--amber);}
+  .verdict.neutral .light{background:var(--amber);box-shadow:0 0 14px var(--amber);}
+  .verdict.neutral .label{color:var(--amber);}
+
+  /* Traffic light dot for table rows */
+  .tl{display:inline-flex;align-items:center;gap:6px;}
+  .tl-dot{width:9px;height:9px;border-radius:50%;flex:none;}
+  .tl-dot.green{background:var(--bull);box-shadow:0 0 6px var(--bull);}
+  .tl-dot.yellow{background:var(--amber);box-shadow:0 0 6px var(--amber);}
+  .tl-dot.red{background:var(--bear);box-shadow:0 0 6px var(--bear);}
+  .tl-text.green{color:var(--bull);}
+  .tl-text.yellow{color:var(--amber);}
+  .tl-text.red{color:var(--bear);}
+
+  .legend{display:flex;gap:16px;flex-wrap:wrap;font-size:11px;color:var(--muted);margin-top:12px;padding-top:12px;border-top:1px dashed var(--line);}
+  .legend .tl{font-size:11px;}
+
+  .ma-row{display:flex;justify-content:space-between;font-size:12px;padding:6px 0;border-bottom:1px dashed var(--line);}
+  .ma-row .k{color:var(--muted);}
+  .chart-wrap{margin-top:14px;}
+
+  /* Scanner block */
+  .scan-controls{display:flex;gap:10px;align-items:center;margin-bottom:14px;flex-wrap:wrap;}
+  .scan-controls .field{width:110px;}
+  .progress{
+    font-size:12px;color:var(--muted);margin-top:10px;min-height:18px;
+  }
+  .progress .bar{height:4px;background:var(--panel-2);border-radius:2px;overflow:hidden;margin-top:6px;}
+  .progress .bar i{display:block;height:100%;background:var(--amber);width:0%;transition:width .25s;}
+
+  table{width:100%;border-collapse:collapse;margin-top:10px;font-size:12.5px;}
+  thead th{
+    text-align:left;color:var(--muted);font-weight:500;text-transform:uppercase;
+    font-size:10.5px;letter-spacing:0.04em;padding:8px 8px;border-bottom:1px solid var(--line);
+  }
+  tbody td{padding:10px 8px;border-bottom:1px solid var(--line);}
+  tbody tr:hover{background:var(--panel-2);}
+  .tk{font-weight:700;font-family:'Space Grotesk',sans-serif;}
+  .pos{color:var(--bull);}
+  .neg{color:var(--bear);}
+  .pill{
+    display:inline-block;padding:2px 8px;border-radius:999px;font-size:10.5px;font-weight:600;
+  }
+  .pill.trigger{background:var(--amber-dim);color:var(--amber);}
+  .pill.watch{background:var(--panel-2);color:var(--muted);border:1px solid var(--line);}
+  .score-bar{width:70px;height:6px;background:var(--panel-2);border-radius:3px;overflow:hidden;display:inline-block;vertical-align:middle;margin-right:6px;}
+  .score-bar i{display:block;height:100%;background:var(--amber);}
+  .empty{color:var(--muted);font-size:13px;padding:20px 4px;text-align:center;}
+
+  footer{font-size:11px;color:var(--muted);line-height:1.6;margin-top:10px;}
+  footer b{color:#B7BEC9;}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="masthead">
+    <div>
+      <h1>TAPE <span>&amp; BASE</span></h1>
+      <div class="tag">Turusentiment + Breakout Strategy skanner (mitte episodic pivot) · päris andmed, sinu API võti</div>
+    </div>
+    <div class="clock" id="clock"></div>
+  </div>
+
+  <div class="config">
+    <div class="field">
+      <label>Andmeallikas</label>
+      <select id="provider">
+        <option value="polygon">Polygon.io (soovitatud — täisturu skann)</option>
+        <option value="alphavantage">Alpha Vantage (top gainers)</option>
+        <option value="finnhub">Finnhub (piiratud — ainult hetkehind)</option>
+      </select>
+    </div>
+    <div class="field">
+      <label>API võti</label>
+      <input type="password" id="apikey" placeholder="kleebi oma võti siia" />
+      <label style="display:flex;align-items:center;gap:6px;margin-top:6px;font-size:11px;color:var(--muted);text-transform:none;letter-spacing:0;font-weight:normal;">
+        <input type="checkbox" id="rememberKey" style="width:auto;" /> Jäta mulle meelde
+      </label>
+    </div>
+    <button class="btn" id="loadBtn">Käivita</button>
+    <button class="btn btn-ghost" id="clearKeyBtn" style="display:none;">Kustuta salvestatud võti</button>
+    <div class="notice" id="providerNotice"></div>
+  </div>
+
+  <!-- BLOCK 1: SENTIMENT -->
+  <section class="block">
+    <div class="block-head">
+      <div>
+        <div class="eyebrow">Plokk 01</div>
+        <h2>Turu sentiment — 10 vs 20 päeva</h2>
+      </div>
+    </div>
+
+    <div class="verdict idle" id="consolidatedBox" style="margin-bottom:16px;padding:14px;">
+      <div class="label" id="consolidatedLabel" style="font-size:16px;">OOTEL</div>
+      <div class="sub" id="consolidatedSub">Käivita, et näha konsolideeritud hinnangut kõigi kolme indeksi peale</div>
+    </div>
+
+    <div class="index-grid" id="indexGrid">
+      <div class="index-card" data-symbol="SPY">
+        <div class="index-card-head">
+          <span class="index-name">SPY — S&amp;P 500</span>
+          <span class="tl" id="SPY-tl"><span class="tl-dot yellow"></span><span class="tl-text yellow">OOTEL</span></span>
+        </div>
+        <div class="ma-row"><span class="k">Sulgemishind</span><span id="SPY-lastClose">—</span></div>
+        <div class="ma-row"><span class="k">10p SMA</span><span id="SPY-sma10">—</span></div>
+        <div class="ma-row"><span class="k">20p SMA</span><span id="SPY-sma20">—</span></div>
+        <div class="ma-row"><span class="k">Vahe</span><span id="SPY-smaGap">—</span></div>
+        <div class="chart-wrap" id="SPY-chartWrap"></div>
+      </div>
+      <div class="index-card" data-symbol="QQQ">
+        <div class="index-card-head">
+          <span class="index-name">QQQ — Nasdaq 100</span>
+          <span class="tl" id="QQQ-tl"><span class="tl-dot yellow"></span><span class="tl-text yellow">OOTEL</span></span>
+        </div>
+        <div class="ma-row"><span class="k">Sulgemishind</span><span id="QQQ-lastClose">—</span></div>
+        <div class="ma-row"><span class="k">10p SMA</span><span id="QQQ-sma10">—</span></div>
+        <div class="ma-row"><span class="k">20p SMA</span><span id="QQQ-sma20">—</span></div>
+        <div class="ma-row"><span class="k">Vahe</span><span id="QQQ-smaGap">—</span></div>
+        <div class="chart-wrap" id="QQQ-chartWrap"></div>
+      </div>
+      <div class="index-card" data-symbol="IWM">
+        <div class="index-card-head">
+          <span class="index-name">IWM — Russell 2000</span>
+          <span class="tl" id="IWM-tl"><span class="tl-dot yellow"></span><span class="tl-text yellow">OOTEL</span></span>
+        </div>
+        <div class="ma-row"><span class="k">Sulgemishind</span><span id="IWM-lastClose">—</span></div>
+        <div class="ma-row"><span class="k">10p SMA</span><span id="IWM-sma10">—</span></div>
+        <div class="ma-row"><span class="k">20p SMA</span><span id="IWM-sma20">—</span></div>
+        <div class="ma-row"><span class="k">Vahe</span><span id="IWM-smaGap">—</span></div>
+        <div class="chart-wrap" id="IWM-chartWrap"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- BLOCK 2: SCANNER -->
+  <section class="block">
+    <div class="block-head">
+      <div>
+        <div class="eyebrow">Plokk 02 · Breakout Strategy</div>
+        <h2>Kullamägi Breakout Strategy — baas + murre</h2>
+      </div>
+    </div>
+
+    <div class="scan-controls">
+      <div class="field">
+        <label>Kandidaate</label>
+        <input type="number" id="candidateCount" value="10" min="5" max="20" />
+      </div>
+      <button class="btn btn-ghost" id="scanBtn" disabled>Skanni turgu</button>
+      <div style="font-size:11px;color:var(--muted)">Tasuta API tasemed on kiiruspiiratud — skann võtab kandidaadi kohta ~10-15 sek.</div>
+    </div>
+
+    <div class="progress" id="scanProgress"></div>
+
+    <table id="resultsTable" style="display:none;">
+      <thead>
+        <tr>
+          <th>Foor</th>
+          <th>Ticker</th>
+          <th>Hind</th>
+          <th>1-kuu %</th>
+          <th>3-kuu %</th>
+          <th>6-kuu %</th>
+          <th>Maht vs 20p keskm.</th>
+          <th>ADR%</th>
+          <th>Struktuur</th>
+          <th>Setup skoor</th>
+          <th>Sisenemine</th>
+          <th>Stop</th>
+        </tr>
+      </thead>
+      <tbody id="resultsBody"></tbody>
+    </table>
+    <div class="legend" id="scanLegend" style="display:none;">
+      <span class="tl"><span class="tl-dot green"></span> Roheline — skoor ≥ 60: struktuur ja mahud toetavad, jälgi lähedalt</span>
+      <span class="tl"><span class="tl-dot yellow"></span> Kollane — skoor 30–59: osaline setup, oota rohkem kinnitust</span>
+      <span class="tl"><span class="tl-dot red"></span> Punane — skoor &lt; 30: praegu ei vasta Kullamägi kriteeriumidele</span>
+      <span class="tl">⚠ ADR% punane — alla ~3%, tüüpiliselt liiga vähe liikumisruumi breakout'i jaoks</span>
+    </div>
+    <div class="empty" id="resultsEmpty">Käivita ülal esmalt sentiment, seejärel vajuta "Skanni turgu".</div>
+
+    <div style="display:flex;gap:8px;margin-top:16px;align-items:center;">
+      <span style="font-size:11px;color:var(--muted);">Klõpsa tabelis tickerile, et näha graafikut, või sisesta käsitsi:</span>
+      <input type="text" id="manualChartSymbol" placeholder="nt AAPL" style="width:120px;background:var(--panel-2);border:1px solid var(--line);color:var(--text);padding:6px 8px;border-radius:4px;font-family:inherit;font-size:12px;" />
+      <button class="btn btn-ghost" id="manualChartBtn" style="padding:6px 12px;font-size:12px;">Näita graafikut</button>
+    </div>
+
+    <div class="chart-panel" id="chartPanelWrap" style="display:none;margin-top:14px;border:1px solid var(--line);border-radius:6px;overflow:hidden;">
+      <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 14px;background:var(--panel-2);border-bottom:1px solid var(--line);">
+        <span class="index-name" id="chartPanelSymbol">—</span>
+        <button class="btn btn-ghost" id="chartPanelClose" style="padding:4px 10px;font-size:11px;">Sulge</button>
+      </div>
+      <div id="tvChartContainer" style="height:420px;width:100%;"></div>
+    </div>
+  </section>
+
+  <!-- BLOCK 3: EXIT STRATEGY -->
+  <section class="block">
+    <div class="block-head">
+      <div>
+        <div class="eyebrow">Plokk 03 · Exit Strategy</div>
+        <h2>Kullamägi väljumisplaan — osaline müük + trailing MA</h2>
+      </div>
+    </div>
+
+    <div class="config" style="margin-bottom:16px;">
+      <div class="field">
+        <label>Ticker</label>
+        <input type="text" id="posSymbol" placeholder="nt HPE" />
+      </div>
+      <div class="field">
+        <label>Ostuhind ($)</label>
+        <input type="number" id="posEntry" step="0.01" placeholder="nt 42.50" />
+      </div>
+      <div class="field">
+        <label>Ostukuupäev</label>
+        <input type="date" id="posDate" />
+      </div>
+      <div class="field">
+        <label>Algne stop ($)</label>
+        <input type="number" id="posStop" step="0.01" placeholder="nt 40.10" />
+      </div>
+      <div class="field">
+        <label>Trailing MA valik</label>
+        <select id="posMA">
+          <option value="10">10-päeva SMA (algajale / kiirem aktsia)</option>
+          <option value="20">20-päeva SMA (kogenumale / aeglasem aktsia)</option>
+        </select>
+      </div>
+      <div class="field">
+        <label style="display:flex;align-items:center;gap:6px;margin-top:22px;font-weight:normal;text-transform:none;letter-spacing:0;">
+          <input type="checkbox" id="posPartialSold" style="width:auto;" /> Osa positsioonist juba müüdud (stop → breakeven)
+        </label>
+      </div>
+      <button class="btn" id="posBtn">Analüüsi positsiooni</button>
+    </div>
+
+    <div id="posResult" style="display:none;">
+      <div class="sentiment-grid">
+        <div class="verdict idle" id="posVerdictBox">
+          <div class="light"></div>
+          <div class="label" id="posVerdictLabel">—</div>
+          <div class="sub" id="posVerdictSub">—</div>
+        </div>
+        <div>
+          <div class="ma-row"><span class="k">Praegune hind (viimane sulgemishind)</span><span id="posPrice">—</span></div>
+          <div class="ma-row"><span class="k">R (risk aktsia kohta)</span><span id="posR">—</span></div>
+          <div class="ma-row"><span class="k">Praegune kasum</span><span id="posProfitR">—</span></div>
+          <div class="ma-row"><span class="k">2R siht (sisenemine + 2×R) <i style="color:var(--amber);font-style:normal;font-size:10px;">LISANDUS</i></span><span id="posTarget2R">—</span></div>
+          <div class="ma-row"><span class="k">3R siht (sisenemine + 3×R) <i style="color:var(--amber);font-style:normal;font-size:10px;">LISANDUS</i></span><span id="posTarget3R">—</span></div>
+          <div class="ma-row"><span class="k">Päevi tehingus</span><span id="posDays">—</span></div>
+          <div class="ma-row"><span class="k">Trailing MA (<span id="posMALabelTxt">10p</span>)</span><span id="posMAValue">—</span></div>
+          <div class="ma-row"><span class="k">Aktiivne stop tase</span><span id="posActiveStop">—</span></div>
+        </div>
+      </div>
+      <div class="notice show" id="posAction" style="margin-top:14px;"></div>
+    </div>
+    <div class="empty" id="posEmpty">Sisesta oma positsiooni andmed ülal ja vajuta "Analüüsi positsiooni".</div>
+  </section>
+
+  <!-- BLOCK 4: POSITION SIZING -->
+  <section class="block">
+    <div class="block-head">
+      <div>
+        <div class="eyebrow">Plokk 04 · Risk &amp; Position Sizing</div>
+        <h2>Positsiooni suuruse kalkulaator</h2>
+      </div>
+    </div>
+
+    <div class="config" style="margin-bottom:16px;">
+      <div class="field">
+        <label>Konto suurus ($)</label>
+        <input type="number" id="psAccount" step="0.01" placeholder="nt 25000" />
+      </div>
+      <div class="field">
+        <label>Risk tehingu kohta (%)</label>
+        <input type="number" id="psRiskPct" step="0.05" value="0.5" min="0.1" max="5" />
+      </div>
+      <div class="field">
+        <label>Sisenemishind ($)</label>
+        <input type="number" id="psEntry" step="0.01" placeholder="nt 42.50" />
+      </div>
+      <div class="field">
+        <label>Stop ($)</label>
+        <input type="number" id="psStop" step="0.01" placeholder="nt 40.10" />
+      </div>
+      <div class="field">
+        <label>Hoiuperiood</label>
+        <select id="psHold">
+          <option value="overnight">Üleöö (swing trade)</option>
+          <option value="intraday">Ainult päevasiseselt</option>
+        </select>
+      </div>
+      <button class="btn btn-ghost" id="psFillFromBlock3">↑ Täida Plokk 3 hinnaga</button>
+      <button class="btn" id="psCalcBtn">Arvuta positsioon</button>
+    </div>
+
+    <div id="psResult" style="display:none;">
+      <div class="sentiment-grid">
+        <div class="verdict idle" id="psVerdictBox">
+          <div class="light"></div>
+          <div class="label" id="psVerdictLabel">—</div>
+          <div class="sub" id="psVerdictSub">—</div>
+        </div>
+        <div>
+          <div class="ma-row"><span class="k">Risk aktsia kohta (R)</span><span id="psRiskPerShare">—</span></div>
+          <div class="ma-row"><span class="k">Lubatud dollari-risk (konto × risk%)</span><span id="psRiskDollar">—</span></div>
+          <div class="ma-row"><span class="k">Soovitatud aktsiate arv</span><span id="psShares">—</span></div>
+          <div class="ma-row"><span class="k">Positsiooni väärtus</span><span id="psPositionValue">—</span></div>
+          <div class="ma-row"><span class="k">Positsioon % kontost</span><span id="psPositionPct">—</span></div>
+          <div class="ma-row"><span class="k">Kullamägi tüüpiline vahemik</span><span style="color:var(--muted);">10–20% kontost, max 30% üleöö</span></div>
+        </div>
+      </div>
+      <div class="notice show" id="psAction" style="margin-top:14px;"></div>
+    </div>
+    <div class="empty" id="psEmpty">Sisesta konto suurus, riskiprotsent, sisenemishind ja stop, seejärel vajuta "Arvuta positsioon".</div>
+  </section>
+
+  <footer>
+    <b>Selgitus:</b> see tööriist rakendab Kristjan Kullamägi avalikult kirjeldatud breakout-metoodika struktuurseid reegleid (baas, kõrgemad madalpunktid, mahupuhang, ADR-põhine stop) päris turuandmetele. See ei ole finantsnõustamine ega osturusoovitus — tegemist on hariva analüüsitööriistaga. Kontrolli alati ise, enne kui reaalset kapitali riskid.
+  </footer>
+
+</div>
+
+<script>
+(function(){
+  const $ = (id) => document.getElementById(id);
+  const providerSel = $('provider');
+  const apikeyInput = $('apikey');
+  const loadBtn = $('loadBtn');
+  const scanBtn = $('scanBtn');
+  const notice = $('providerNotice');
+
+  function setClock(){
+    $('clock').textContent = new Date().toLocaleString('et-EE');
+  }
+  setClock(); setInterval(setClock, 1000);
+
+  function sleep(ms){ return new Promise(r=>setTimeout(r,ms)); }
+
+  // ---------- Persistent key storage (personal, not shared) ----------
+  const rememberBox = $('rememberKey');
+  const clearKeyBtn = $('clearKeyBtn');
+
+  async function loadSavedKey(){
+    try{
+      const res = await window.storage.get('tape-and-base:apikey', false);
+      if(res && res.value){
+        const saved = JSON.parse(res.value);
+        apikeyInput.value = saved.key || '';
+        if(saved.provider) providerSel.value = saved.provider;
+        rememberBox.checked = true;
+        clearKeyBtn.style.display = 'inline-block';
+        updateNotice();
+      }
+    }catch(e){
+      // no saved key yet — that's fine, nothing to load
+    }
+  }
+
+  async function saveKey(){
+    if(!rememberBox.checked) return;
+    try{
+      await window.storage.set('tape-and-base:apikey', JSON.stringify({
+        key: apikeyInput.value.trim(),
+        provider: providerSel.value
+      }), false);
+      clearKeyBtn.style.display = 'inline-block';
+    }catch(e){
+      console.error('Salvestamine ebaõnnestus:', e);
+    }
+  }
+
+  async function clearSavedKey(){
+    try{
+      await window.storage.delete('tape-and-base:apikey', false);
+    }catch(e){ /* already empty, fine */ }
+    apikeyInput.value = '';
+    rememberBox.checked = false;
+    clearKeyBtn.style.display = 'none';
+  }
+
+  rememberBox.addEventListener('change', ()=>{
+    if(rememberBox.checked) saveKey();
+    else clearSavedKey();
+  });
+  clearKeyBtn.addEventListener('click', clearSavedKey);
+  loadSavedKey();
+
+  const PROVIDER_NOTES = {
+    polygon: "Polygon (nüüd 'Massive.com'): kandidaadid leitakse õigelt Kullamägi meetodilt — 1/3/6-kuu liidrid (4 turusnapshot'i, mitte päeva top-gainers). TÄHELEPANU: allikad on vastuolulised, kas tasuta tase (5 päringut/min) veel eksisteerib pärast rebrändi — kontrolli kindlasti otse polygon.io lehelt enne kasutamist.",
+    alphavantage: "Alpha Vantage: kuna neil pole tasuta bulk-endpoint'i kogu turu ajaloo jaoks, kasutame kandidaatide algfiltrina nende TOP_GAINERS_LOSERS (päevapõhine) nimekirja — see EI ole täpselt Kullamägi 1/3/6-kuu meetod, vaid parim võimalik lähend antud API piirangutega. Kindlalt tasuta, aga kitsas (~25 päringut/päevas, 5/min).",
+    finnhub: "Finnhub: tasuta tase enam ei toeta ajaloolisi küünlaid aktsiate jaoks (ainult hetkehind /quote kaudu). Seetõttu töötab siin ainult lihtne päevamuutuse järjestus — ADR, konsolideerumine ja SMA arvutused EI ole võimalikud. Täisfunktsionaalsuse jaoks vali Alpha Vantage."
+  };
+
+  function updateNotice(){
+    notice.textContent = PROVIDER_NOTES[providerSel.value];
+    notice.classList.add('show');
+  }
+  providerSel.addEventListener('change', updateNotice);
+  updateNotice();
+
+  // ---------- Rate limiting per provider ----------
+  const DELAY_MS = { polygon: 13000, alphavantage: 13500, finnhub: 300 };
+
+  // ---------- Adapters: each returns ascending-by-date array of {t,o,h,l,c,v} ----------
+  async function fetchJSON(url){
+    const res = await fetch(url);
+    if(!res.ok) throw new Error('HTTP ' + res.status);
+    return res.json();
+  }
+
+  async function polygonDaily(symbol, key, days){
+    const to = new Date();
+    const from = new Date(); from.setDate(from.getDate() - (days||220));
+    const fmt = d => d.toISOString().slice(0,10);
+    const url = `https://api.polygon.io/v2/aggs/ticker/${symbol}/range/1/day/${fmt(from)}/${fmt(to)}?adjusted=true&sort=asc&limit=500&apiKey=${key}`;
+    const data = await fetchJSON(url);
+    if(!data.results) return [];
+    return data.results.map(r=>({t:r.t, o:r.o, h:r.h, l:r.l, c:r.c, v:r.v}));
+  }
+
+  async function polygonGroupedNear(key, baseDate, maxTriesBack){
+    for(let i=0;i<=maxTriesBack;i++){
+      const d = new Date(baseDate); d.setDate(d.getDate()-i);
+      const iso = d.toISOString().slice(0,10);
+      try{
+        const url = `https://api.polygon.io/v2/aggs/grouped/locale/us/market/stocks/${iso}?adjusted=true&apiKey=${key}`;
+        const data = await fetchJSON(url);
+        if(data.results && data.results.length){
+          return {date: iso, rows: data.results.map(r=>({sym:r.T,o:r.o,h:r.h,l:r.l,c:r.c,v:r.v}))};
+        }
+      }catch(e){ /* try earlier day */ }
+      await sleep(300);
+    }
+    throw new Error('Ei leidnud kauplemispäeva ' + baseDate.toISOString().slice(0,10) + ' ümbruses (Polygon).');
+  }
+
+  // Kullamägi meetod: "scan for the 1-2% of stocks up the most over 1-month, 3-month, 6-month".
+  // 4 grouped-daily päringut (täna, -1kuu, -3kuu, -6kuu) annavad kogu turu korraga, ilma et peaks
+  // iga aktsiat eraldi pärima — nii saab õiget mitmekuist liidrite pingerida ka tasuta API tasemel.
+  async function polygonMultiMonthLeaders(key, count){
+    const base = new Date(); base.setDate(base.getDate()-1); // eilne, et vältida veel sulgemata päeva
+
+    const snapToday = await polygonGroupedNear(key, base, 6);
+    await sleep(DELAY_MS.polygon);
+    const d1 = new Date(base); d1.setDate(d1.getDate()-30);
+    const snap1M = await polygonGroupedNear(key, d1, 6);
+    await sleep(DELAY_MS.polygon);
+    const d3 = new Date(base); d3.setDate(d3.getDate()-91);
+    const snap3M = await polygonGroupedNear(key, d3, 6);
+    await sleep(DELAY_MS.polygon);
+    const d6 = new Date(base); d6.setDate(d6.getDate()-182);
+    const snap6M = await polygonGroupedNear(key, d6, 6);
+
+    const map1 = new Map(snap1M.rows.map(r=>[r.sym, r.c]));
+    const map3 = new Map(snap3M.rows.map(r=>[r.sym, r.c]));
+    const map6 = new Map(snap6M.rows.map(r=>[r.sym, r.c]));
+
+    const scored = [];
+    for(const row of snapToday.rows){
+      if(row.c < 5 || row.v < 500000) continue;
+      const c1 = map1.get(row.sym), c3 = map3.get(row.sym), c6 = map6.get(row.sym);
+      if(!c1 || !c3 || !c6) continue;
+      const pct1M = (row.c-c1)/c1*100;
+      const pct3M = (row.c-c3)/c3*100;
+      const pct6M = (row.c-c6)/c6*100;
+      // kaalustame lähemat perioodi rohkem, kuna otsime "praegu juhtivaid" aktsiaid
+      const composite = pct1M*0.5 + pct3M*0.3 + pct6M*0.2;
+      scored.push({sym:row.sym, pct1M, pct3M, pct6M, composite});
+    }
+    scored.sort((a,b)=>b.composite-a.composite);
+    return scored.slice(0, count);
+  }
+
+  async function alphaDaily(symbol, key, full){
+    const url = `https://www.alphavantage.co/query?function=TIME_SERIES_DAILY&symbol=${symbol}&outputsize=${full?'full':'compact'}&apikey=${key}`;
+    const data = await fetchJSON(url);
+    const series = data['Time Series (Daily)'];
+    if(!series) throw new Error(data['Note'] || data['Information'] || 'Alpha Vantage andmed puuduvad — kontrolli API võtit / piirmäära.');
+    return Object.keys(series).sort().map(date=>{
+      const row = series[date];
+      return {t:new Date(date).getTime(), o:+row['1. open'], h:+row['2. high'], l:+row['3. low'], c:+row['4. close'], v:+row['5. volume']};
+    });
+  }
+
+  async function alphaTopGainers(key){
+    const url = `https://www.alphavantage.co/query?function=TOP_GAINERS_LOSERS&apikey=${key}`;
+    const data = await fetchJSON(url);
+    if(!data.top_gainers) throw new Error(data['Note'] || data['Information'] || 'Alpha Vantage top gainers puudub — kontrolli võtit.');
+    return data.top_gainers.map(g=>({sym:g.ticker, changePct:parseFloat(g.change_percentage)}));
+  }
+
+  async function finnhubQuote(symbol, key){
+    const url = `https://finnhub.io/api/v2/quote?symbol=${symbol}&token=${key}`;
+    const data = await fetchJSON(url);
+    return data; // {c: current, pc: prev close, ...}
+  }
+
+  const FINNHUB_UNIVERSE = ["AAPL","MSFT","NVDA","AMD","AVGO","GOOGL","META","AMZN","TSLA","NFLX",
+    "CRM","ORCL","ADBE","PANW","CRWD","SNOW","PLTR","SMCI","DELL","HPE","HPQ",
+    "MU","INTC","QCOM","TXN","ASML","TSM","ARM","MRVL","ON","LRCX",
+    "JPM","BAC","GS","V","MA","UNH","LLY","XOM","CVX","HAL",
+    "COIN","MSTR","RDDT","SHOP","UBER","ABNB","DIS","NKE","SBUX","CMG"];
+
+  // ---------- Sentiment ----------
+  const SENTIMENT_INDICES = ['SPY','QQQ','IWM'];
+
+  function sma(closes, period){
+    const slice = closes.slice(-period);
+    return slice.reduce((a,b)=>a+b,0)/slice.length;
+  }
+
+  function renderChart(bars, targetId){
+    const w=380,h=120,pad=6;
+    const closes = bars.map(b=>b.c);
+    const min = Math.min(...closes), max = Math.max(...closes);
+    const range = (max-min)||1;
+    const x = i => pad + (i/(bars.length-1))*(w-2*pad);
+    const y = v => h-pad - ((v-min)/range)*(h-2*pad);
+    let path = bars.map((b,i)=> (i===0?'M':'L') + x(i).toFixed(1) + ',' + y(b.c).toFixed(1)).join(' ');
+
+    function maLine(period){
+      let pts=[];
+      for(let i=period-1;i<bars.length;i++){
+        const val = sma(closes.slice(0,i+1), period);
+        pts.push([i,val]);
+      }
+      return pts.map((p,i)=> (i===0?'M':'L') + x(p[0]).toFixed(1) + ',' + y(p[1]).toFixed(1)).join(' ');
+    }
+    const ma10 = bars.length>=10 ? maLine(10) : '';
+    const ma20 = bars.length>=20 ? maLine(20) : '';
+
+    $(targetId).innerHTML = `
+      <svg viewBox="0 0 ${w} ${h}" style="width:100%;height:110px;">
+        <path d="${path}" fill="none" stroke="#4B5563" stroke-width="1.5" />
+        ${ma20 ? `<path d="${ma20}" fill="none" stroke="#FF5C6C" stroke-width="1.5" />` : ''}
+        ${ma10 ? `<path d="${ma10}" fill="none" stroke="#3ECF8E" stroke-width="1.5" />` : ''}
+      </svg>`;
+  }
+
+  function setIndexTL(symbol, kind, label){
+    const el = $(symbol + '-tl');
+    const cls = kind==='bull' ? 'green' : (kind==='bear' ? 'red' : 'yellow');
+    el.innerHTML = `<span class="tl-dot ${cls}"></span><span class="tl-text ${cls}">${label}</span>`;
+  }
+
+  function setConsolidated(kind, label, sub){
+    const box = $('consolidatedBox');
+    box.className = 'verdict ' + kind;
+    $('consolidatedLabel').textContent = label;
+    $('consolidatedSub').textContent = sub;
+  }
+
+  async function loadOneIndex(symbol, provider, key){
+    setIndexTL(symbol, 'idle', 'LAEN…');
+    const bars = provider === 'polygon' ? await polygonDaily(symbol, key, 90) : await alphaDaily(symbol, key);
+    if(bars.length < 21) throw new Error(symbol + ': liiga vähe andmepunkte 20p SMA jaoks.');
+
+    const closes = bars.map(b=>b.c);
+    const s10 = sma(closes,10), s20 = sma(closes,20);
+    const last = closes[closes.length-1];
+    const gap = ((s10-s20)/s20*100);
+
+    $(symbol+'-lastClose').textContent = last.toFixed(2);
+    $(symbol+'-sma10').textContent = s10.toFixed(2);
+    $(symbol+'-sma20').textContent = s20.toFixed(2);
+    $(symbol+'-smaGap').textContent = (gap>=0?'+':'') + gap.toFixed(2) + '%';
+    renderChart(bars.slice(-60), symbol+'-chartWrap');
+
+    let kind;
+    if(Math.abs(gap) < 0.15){ kind = 'neutral'; setIndexTL(symbol,'neutral','NEUTRAALNE'); }
+    else if(s10 > s20){ kind = 'bull'; setIndexTL(symbol,'bull','TÕUSEV'); }
+    else { kind = 'bear'; setIndexTL(symbol,'bear','LANGEV'); }
+    return kind;
+  }
+
+  async function runSentiment(){
+    const provider = providerSel.value;
+    const key = apikeyInput.value.trim();
+
+    if(!key){ alert('Sisesta oma API võti.'); return; }
+
+    if(provider === 'finnhub'){
+      setConsolidated('idle', 'POLE VÕIMALIK', 'Finnhub tasuta tase ei anna ajaloolisi küünlaid — vali Polygon või Alpha Vantage sentimendi jaoks.');
+      return;
+    }
+
+    setConsolidated('idle', 'LAEN…', 'Tõmban SPY, QQQ ja IWM andmeid…');
+
+    const kinds = [];
+    for(let i=0;i<SENTIMENT_INDICES.length;i++){
+      const symbol = SENTIMENT_INDICES[i];
+      try{
+        const kind = await loadOneIndex(symbol, provider, key);
+        kinds.push(kind);
+      }catch(e){
+        setIndexTL(symbol, 'idle', 'VIGA');
+        kinds.push(null);
+      }
+      if(i < SENTIMENT_INDICES.length-1) await sleep(DELAY_MS[provider]);
+    }
+
+    const bullCount = kinds.filter(k=>k==='bull').length;
+    const bearCount = kinds.filter(k=>k==='bear').length;
+    const neutralCount = kinds.filter(k=>k==='neutral').length;
+    const errCount = kinds.filter(k=>k===null).length;
+
+    if(errCount === SENTIMENT_INDICES.length){
+      setConsolidated('idle', 'VIGA', 'Ühegi indeksi andmeid ei õnnestunud laadida — kontrolli API võtit / piirmäära.');
+    } else if(bullCount >= 2){
+      setConsolidated('bull', 'TÕUSEV (' + bullCount + '/3 indeksit)', 'Enamik indekseid näitab 10p SMA üle 20p SMA — Kullamägi filter lubab breakout/EP setup\'e otsida.');
+    } else if(bearCount >= 2){
+      setConsolidated('bear', 'LANGEV (' + bearCount + '/3 indeksit)', 'Enamik indekseid näitab 10p SMA alla 20p SMA — soovitatud olla ettevaatlik / vähendada positsioone.');
+    } else {
+      setConsolidated('neutral', 'SEGATUD / NEUTRAALNE', 'Indeksid ei anna ühest signaali (' + bullCount + ' tõusev, ' + bearCount + ' langev, ' + neutralCount + ' neutraalne) — turg pole selges suunas, ole valikuline.');
+    }
+
+    scanBtn.disabled = false;
+  }
+
+  // ---------- Scanner analysis ----------
+  function analyze(bars){
+    if(bars.length < 25) return null;
+    const closes = bars.map(b=>b.c), highs = bars.map(b=>b.h), lows = bars.map(b=>b.l), vols = bars.map(b=>b.v);
+    const n = bars.length;
+    const last = bars[n-1];
+
+    const idxMonthAgo = Math.max(0, n-22);
+    const pctMove1M = ((closes[n-1]-closes[idxMonthAgo])/closes[idxMonthAgo])*100;
+
+    const idx3M = n-63;
+    const pctMove3M = idx3M >= 0 ? ((closes[n-1]-closes[idx3M])/closes[idx3M])*100 : null;
+
+    const idx6M = n-126;
+    const pctMove6M = idx6M >= 0 ? ((closes[n-1]-closes[idx6M])/closes[idx6M])*100 : null;
+
+    const adrPeriod = Math.min(20, n-1);
+    let adrSum=0;
+    for(let i=n-adrPeriod;i<n;i++) adrSum += (highs[i]-lows[i]);
+    const adr = adrSum/adrPeriod;
+    const adrPct = (adr/last.c)*100;
+    const lowADR = adrPct < 3; // levinud juhis: alla ~3% ADR tähendab liiga vähe liikumisruumi breakout'i jaoks
+
+    const volPeriod = Math.min(20, n-1);
+    let volSum=0;
+    for(let i=n-volPeriod;i<n;i++) volSum += vols[i];
+    const volAvg = volSum/volPeriod;
+    const volRatio = volAvg>0 ? (last.v/volAvg) : 0;
+
+    function rangeOf(startBack, endBack){ // bars back from end, e.g. (20,10) = 20..10 bars ago
+      const s = Math.max(0, n-startBack), e = Math.max(0, n-endBack);
+      const hs = highs.slice(s,e), ls = lows.slice(s,e);
+      if(!hs.length) return null;
+      return Math.max(...hs) - Math.min(...ls);
+    }
+    const range10 = rangeOf(10,0);
+    const range20prev = rangeOf(20,10);
+    const narrowing = (range10!==null && range20prev!==null) ? (range10 < range20prev) : false;
+
+    const lowsTail = lows.slice(-8);
+    let higherLowScore = 0;
+    for(let i=1;i<lowsTail.length;i++){ if(lowsTail[i] >= lowsTail[i-1]*0.995) higherLowScore++; }
+    const higherLows = higherLowScore >= (lowsTail.length-1)*0.6;
+
+    const priorHigh = Math.max(...highs.slice(Math.max(0,n-21), n-1));
+    const breakout = last.c > priorHigh && volRatio > 1.3;
+
+    let score = 0;
+    // Kullamägi otsib "leaders üle 1/3/6 kuu" — kaalume kõiki kolme, lähem periood veidi rohkem.
+    const moveComposite = Math.max(0, pctMove1M)*0.5 + Math.max(0, pctMove3M||0)*0.3 + Math.max(0, pctMove6M||0)*0.2;
+    score += Math.min(30, moveComposite/3); // normaliseeritud, kuni 30 punkti
+    score += narrowing ? 15 : 0;
+    score += higherLows ? 15 : 0;
+    score += volRatio>1.5 ? 20 : (volRatio>1 ? 10 : 0);
+    score += breakout ? 20 : 0;
+    if(lowADR) score = Math.min(score, 25); // madal ADR piirab skoori, isegi kui muu struktuur näeb hea välja
+    score = Math.round(Math.min(100, score));
+
+    const dayLowStop = last.l;
+    const adrStop = last.c - adr;
+    const stop = Math.max(dayLowStop, adrStop); // tighter of the two, respecting ADR ceiling on risk
+    const entry = breakout ? last.c : priorHigh;
+
+    return {
+      price:last.c, pctMove1M, pctMove3M, pctMove6M, adrPct, lowADR, volRatio, narrowing, higherLows, breakout,
+      score, entry, stop
+    };
+  }
+
+  function trafficLight(score){
+    if(score >= 60) return {cls:'green', text:'Roheline'};
+    if(score >= 30) return {cls:'yellow', text:'Kollane'};
+    return {cls:'red', text:'Punane'};
+  }
+
+  function renderResults(rows){
+    const tbody = $('resultsBody');
+    tbody.innerHTML='';
+    if(!rows.length){
+      $('resultsTable').style.display='none';
+      $('scanLegend').style.display='none';
+      $('resultsEmpty').style.display='block';
+      $('resultsEmpty').textContent = 'Skann ei leidnud sobivaid kandidaate praeguste kriteeriumidega.';
+      return;
+    }
+    $('resultsTable').style.display='table';
+    $('scanLegend').style.display='flex';
+    $('resultsEmpty').style.display='none';
+
+    rows.sort((a,b)=>b.a.score-a.a.score);
+    rows.forEach(({sym,a})=>{
+      const tr = document.createElement('tr');
+      const tl = trafficLight(a.score);
+      const fmtPct = v => v===null ? 'N/A' : ((v>=0?'+':'')+v.toFixed(1)+'%');
+      const pctClass = v => v===null ? '' : (v>=0?'pos':'neg');
+      tr.innerHTML = `
+        <td><span class="tl"><span class="tl-dot ${tl.cls}"></span><span class="tl-text ${tl.cls}">${tl.text}</span></span></td>
+        <td class="tk" data-sym="${sym}" style="cursor:pointer;text-decoration:underline dotted;" title="Klõpsa graafiku vaatamiseks">${sym}</td>
+        <td>$${a.price.toFixed(2)}</td>
+        <td class="${pctClass(a.pctMove1M)}">${fmtPct(a.pctMove1M)}</td>
+        <td class="${pctClass(a.pctMove3M)}">${fmtPct(a.pctMove3M)}</td>
+        <td class="${pctClass(a.pctMove6M)}">${fmtPct(a.pctMove6M)}</td>
+        <td>${a.volRatio.toFixed(2)}x</td>
+        <td class="${a.lowADR?'neg':''}">${a.adrPct.toFixed(1)}%${a.lowADR?' ⚠':''}</td>
+        <td>${a.narrowing?'kitseneb ':''}${a.higherLows?'/ kõrgemad madalp.':''}${(!a.narrowing && !a.higherLows)?'—':''}</td>
+        <td><span class="score-bar"><i style="width:${a.score}%"></i></span>${a.score}</td>
+        <td>$${a.entry.toFixed(2)}</td>
+        <td>$${a.stop.toFixed(2)}</td>
+      `;
+      tbody.appendChild(tr);
+    });
+  }
+
+  function setProgress(text, pct){
+    const p = $('scanProgress');
+    p.innerHTML = text + `<div class="bar"><i style="width:${pct}%"></i></div>`;
+  }
+
+  async function runScan(){
+    const provider = providerSel.value;
+    const key = apikeyInput.value.trim();
+    const count = Math.max(5, Math.min(20, parseInt($('candidateCount').value||10)));
+    scanBtn.disabled = true;
+
+    try{
+      let symbols = [];
+      setProgress('Otsin liikumiskandidaate…', 3);
+
+      if(provider === 'polygon'){
+        setProgress('Ehitan 1/3/6-kuu liidrite pingerida (4 turusnapshot\'i)…', 5);
+        const leaders = await polygonMultiMonthLeaders(key, count);
+        symbols = leaders.map(l=>l.sym);
+      } else if(provider === 'alphavantage'){
+        setProgress('Alpha Vantage: kasutan päeva top-gainers nimekirja kandidaatide algfiltrina (API piirangu tõttu ei ole täit 1/3/6-kuu turuskänni võimalik teha)…', 5);
+        const gainers = await alphaTopGainers(key);
+        symbols = gainers.slice(0,count).map(g=>g.sym);
+        await sleep(DELAY_MS.alphavantage);
+      } else {
+        // finnhub limited mode
+        setProgress('Finnhub piiratud režiim: järjestan kureeritud nimekirja hetkehinna muutuse järgi…', 5);
+        const quotes = [];
+        for(let i=0;i<FINNHUB_UNIVERSE.length;i++){
+          const s = FINNHUB_UNIVERSE[i];
+          try{
+            const q = await finnhubQuote(s, key);
+            if(q && q.c && q.pc){
+              quotes.push({sym:s, chg: ((q.c-q.pc)/q.pc)*100, price:q.c});
+            }
+          }catch(e){}
+          setProgress(`Kontrollin ${s}… (${i+1}/${FINNHUB_UNIVERSE.length})`, ((i+1)/FINNHUB_UNIVERSE.length)*100);
+          await sleep(DELAY_MS.finnhub);
+        }
+        quotes.sort((a,b)=>b.chg-a.chg);
+        const top = quotes.slice(0,count);
+        const rows = top.map(t=>({sym:t.sym, a:{
+          price:t.price, pctMove1M:t.chg, pctMove3M:null, pctMove6M:null, adrPct:0, volRatio:0, narrowing:false, higherLows:false,
+          breakout:false, score:Math.max(0,Math.min(30,t.chg)), entry:t.price, stop:t.price*0.95
+        }}));
+        setProgress('Valmis (piiratud režiim — ainult päevamuutus, ilma ADR/struktuurita).', 100);
+        renderResults(rows);
+        scanBtn.disabled = false;
+        return;
+      }
+
+      if(!symbols.length) throw new Error('Kandidaate ei leitud.');
+
+      const results = [];
+      for(let i=0;i<symbols.length;i++){
+        const sym = symbols[i];
+        setProgress(`Analüüsin ${sym}… (${i+1}/${symbols.length})`, ((i)/symbols.length)*100);
+        try{
+          // ~220 kalendripäeva tagab piisavalt andmeid ka 6-kuu (~126 kauplemispäeva) arvutuseks
+          const bars = provider==='polygon' ? await polygonDaily(sym, key, 220) : await alphaDaily(sym, key, true);
+          const a = analyze(bars);
+          if(a) results.push({sym, a});
+        }catch(e){ /* skip symbol on error */ }
+        if(i < symbols.length-1) await sleep(DELAY_MS[provider]);
+      }
+      setProgress('Valmis.', 100);
+      renderResults(results);
+    }catch(e){
+      setProgress('Viga: ' + e.message, 0);
+    }finally{
+      scanBtn.disabled = false;
+    }
+  }
+
+  loadBtn.addEventListener('click', ()=>{ saveKey(); runSentiment(); });
+  apikeyInput.addEventListener('input', ()=>{ if(rememberBox.checked) saveKey(); });
+  providerSel.addEventListener('change', ()=>{ if(rememberBox.checked) saveKey(); });
+  scanBtn.addEventListener('click', runScan);
+
+  // ---------- BLOCK 3: Exit strategy ----------
+  function businessDaysBetween(d1, d2){
+    let count = 0;
+    const cur = new Date(d1);
+    while(cur < d2){
+      cur.setDate(cur.getDate()+1);
+      const day = cur.getDay();
+      if(day !== 0 && day !== 6) count++;
+    }
+    return count;
+  }
+
+  function setPosVerdict(kind, label, sub){
+    const box = $('posVerdictBox');
+    box.className = 'verdict ' + kind;
+    $('posVerdictLabel').textContent = label;
+    $('posVerdictSub').textContent = sub;
+  }
+
+  async function runExitAnalysis(){
+    const provider = providerSel.value;
+    const key = apikeyInput.value.trim();
+    const symbol = $('posSymbol').value.trim().toUpperCase();
+    const entry = parseFloat($('posEntry').value);
+    const dateStr = $('posDate').value;
+    const initialStop = parseFloat($('posStop').value);
+    const maPeriod = parseInt($('posMA').value);
+    const partialSold = $('posPartialSold').checked;
+
+    $('posMALabelTxt').textContent = maPeriod + 'p';
+
+    if(!key){ alert('Sisesta oma API võti ülal.'); return; }
+    if(!symbol || isNaN(entry) || !dateStr || isNaN(initialStop)){
+      alert('Täida kõik väljad: ticker, ostuhind, ostukuupäev, algne stop.');
+      return;
+    }
+    if(provider === 'finnhub'){
+      alert('Finnhub tasuta tase ei anna ajaloolisi küünlaid — vali Polygon või Alpha Vantage.');
+      return;
+    }
+
+    $('posResult').style.display = 'block';
+    $('posEmpty').style.display = 'none';
+    setPosVerdict('idle', 'LAEN…', 'Tõmban ' + symbol + ' andmeid');
+    $('posAction').textContent = '';
+
+    try{
+      const bars = provider === 'polygon' ? await polygonDaily(symbol, key, 90) : await alphaDaily(symbol, key);
+      if(bars.length < maPeriod + 1) throw new Error('Liiga vähe andmepunkte ' + maPeriod + '-päeva SMA jaoks.');
+
+      const closes = bars.map(b=>b.c);
+      const lastBar = bars[bars.length-1];
+      const currentPrice = lastBar.c;
+
+      const R = entry - initialStop; // risk per share in $
+      if(R <= 0) throw new Error('Algne stop peab olema madalam kui ostuhind (R peab olema positiivne).');
+
+      const profitPerShare = currentPrice - entry;
+      const profitR = profitPerShare / R;
+
+      const target2R = entry + 2*R;
+      const target3R = entry + 3*R;
+
+      const entryDate = new Date(dateStr + 'T00:00:00');
+      const lastDate = new Date(lastBar.t);
+      const daysHeld = businessDaysBetween(entryDate, lastDate);
+
+      const maValue = sma(closes, maPeriod);
+      const activeStop = partialSold ? Math.max(entry, initialStop) : initialStop;
+
+      $('posPrice').textContent = '$' + currentPrice.toFixed(2);
+      $('posR').textContent = '$' + R.toFixed(2);
+      $('posProfitR').textContent = (profitR>=0?'+':'') + profitR.toFixed(2) + 'R ($' + profitPerShare.toFixed(2) + ')';
+      $('posTarget2R').textContent = '$' + target2R.toFixed(2) + (currentPrice>=target2R ? ' ✓ jõutud' : '');
+      $('posTarget3R').textContent = '$' + target3R.toFixed(2) + (currentPrice>=target3R ? ' ✓ jõutud' : '');
+      $('posDays').textContent = daysHeld + ' tööpäeva';
+      $('posMAValue').textContent = '$' + maValue.toFixed(2);
+      $('posActiveStop').textContent = '$' + activeStop.toFixed(2) + (partialSold ? ' (breakeven)' : ' (algne stop)');
+
+      // ---- Decision logic ----
+      const closeBelowMA = currentPrice < maValue;
+      const closeBelowStop = currentPrice < activeStop;
+      const partialWindowReached = (daysHeld >= 3 && daysHeld <= 5);
+      const partialProfitReached = profitR >= 2;
+      const partialDue = !partialSold && (partialWindowReached || partialProfitReached);
+
+      if(closeBelowStop || closeBelowMA){
+        setPosVerdict('bear', 'VÄLJU', closeBelowStop
+          ? 'Sulgemishind on all su stopist ($' + activeStop.toFixed(2) + ') — sule positsioon vastavalt reeglile.'
+          : 'Sulgemishind ($' + currentPrice.toFixed(2) + ') on allpool ' + maPeriod + 'p SMA-d ($' + maValue.toFixed(2) + ') — Kullamägi reegli järgi väljumistrigger on käivitunud.');
+        $('posAction').innerHTML = '<b>Tegevus:</b> sule positsioon (või ülejäänud osa) täna, kui sulgemishind kinnitab allpool taset. See on distsipliini koht, kus enamik kauplejaid reegleid eirab.';
+      } else if(partialDue){
+        setPosVerdict('neutral', 'MÜÜ OSA NÜÜD', partialWindowReached
+          ? 'Oled hoidnud ' + daysHeld + ' tööpäeva (3-5 päeva aken) — aeg realiseerida osa kasumist.'
+          : 'Oled jõudnud ' + profitR.toFixed(1) + 'R kasumini (üle 2R läve, lisandus originaalreeglitele) — aeg realiseerida osa kasumist.');
+        $('posAction').innerHTML = '<b>Tegevus:</b> müü 1/3 kuni 1/2 positsioonist praegu, seejärel liiguta stop breakeven\'ile ($' + entry.toFixed(2) + '). Märgi allolev linnuke "juba müüdud" ja analüüsi uuesti, et jälgida ülejäänud osa ' + maPeriod + 'p SMA trailinguga.';
+      } else if(partialSold){
+        setPosVerdict('bull', 'HOIA — TRAIL', 'Osa on juba müüdud, stop on breakeven\'il. Ülejäänud positsiooni jälgitakse ' + maPeriod + 'p SMA-ga ($' + maValue.toFixed(2) + ') — väljud, kui sulgemishind langeb sellest allapoole.');
+        $('posAction').innerHTML = '<b>Tegevus:</b> hoia ülejäänud positsiooni. Kontrolli iga päev, kas sulgemishind on ' + maPeriod + 'p SMA all — see on sinu järgmine väljumistrigger.';
+      } else {
+        setPosVerdict('bull', 'HOIA', 'Tehing areneb plaanipäraselt. Kasum on ' + profitR.toFixed(2) + 'R, veel pole jõutud osalise müügi hetkeni (3-5 päeva või 2R).');
+        $('posAction').innerHTML = '<b>Tegevus:</b> hoia täies mahus, jälgi stopi taset ($' + activeStop.toFixed(2) + ') ja jälgi, millal jõuad 3-5 päeva või 2R kasumi lävendini.';
+      }
+    }catch(e){
+      setPosVerdict('idle', 'VIGA', e.message);
+      $('posAction').textContent = '';
+    }
+  }
+
+  $('posBtn').addEventListener('click', runExitAnalysis);
+
+  // ---------- BLOCK 4: Position sizing ----------
+  function setPsVerdict(kind, label, sub){
+    const box = $('psVerdictBox');
+    box.className = 'verdict ' + kind;
+    $('psVerdictLabel').textContent = label;
+    $('psVerdictSub').textContent = sub;
+  }
+
+  $('psFillFromBlock3').addEventListener('click', ()=>{
+    const e = $('posEntry').value, s = $('posStop').value;
+    if(e) $('psEntry').value = e;
+    if(s) $('psStop').value = s;
+  });
+
+  function calculatePositionSize(){
+    const account = parseFloat($('psAccount').value);
+    const riskPct = parseFloat($('psRiskPct').value);
+    const entry = parseFloat($('psEntry').value);
+    const stop = parseFloat($('psStop').value);
+    const holdType = $('psHold').value;
+
+    if(isNaN(account) || isNaN(riskPct) || isNaN(entry) || isNaN(stop)){
+      alert('Täida kõik väljad: konto suurus, riskiprotsent, sisenemishind, stop.');
+      return;
+    }
+    const riskPerShare = entry - stop;
+    if(riskPerShare <= 0){
+      alert('Stop peab olema madalam kui sisenemishind (risk aktsia kohta peab olema positiivne).');
+      return;
+    }
+
+    $('psResult').style.display = 'block';
+    $('psEmpty').style.display = 'none';
+
+    const riskDollar = account * (riskPct/100);
+    let shares = Math.floor(riskDollar / riskPerShare);
+    let positionValue = shares * entry;
+    let positionPct = (positionValue / account) * 100;
+
+    $('psRiskPerShare').textContent = '$' + riskPerShare.toFixed(2);
+    $('psRiskDollar').textContent = '$' + riskDollar.toFixed(2);
+    $('psShares').textContent = shares.toLocaleString('et-EE') + ' aktsiat';
+    $('psPositionValue').textContent = '$' + positionValue.toLocaleString('et-EE', {maximumFractionDigits:2});
+    $('psPositionPct').textContent = positionPct.toFixed(1) + '%';
+
+    // ---- Kullamägi piirangud ----
+    const overnightCap = 30; // never more than 30% overnight
+    const typicalLow = 10, typicalHigh = 20; // most positions are 10-20% of account
+    const riskWarnPct = 1; // rarely risk more than 1%
+
+    const exceedsOvernightCap = holdType==='overnight' && positionPct > overnightCap;
+    const exceedsRiskNorm = riskPct > riskWarnPct;
+    const outsideTypical = positionPct < typicalLow || positionPct > typicalHigh;
+
+    if(exceedsOvernightCap){
+      const cappedShares = Math.floor((account*(overnightCap/100))/entry);
+      setPsVerdict('bear', 'ÜLE PIIRI — VÄHENDA', 'Positsioon (' + positionPct.toFixed(1) + '% kontost) ületab Kullamägi 30% üleöö piiri.');
+      $('psAction').innerHTML = '<b>Tegevus:</b> vähenda positsiooni maksimaalselt ' + cappedShares.toLocaleString('et-EE') + ' aktsiani (~30% kontost), või kaalu, kas see on tõesti swing trade (üleöö) — päevasisesel kauplemisel see piirang ei kehti nii rangelt.';
+    } else if(exceedsRiskNorm){
+      setPsVerdict('neutral', 'RISK KÕRGE', 'Riskid ' + riskPct.toFixed(2) + '% kontost — Kullamägi ise ütleb, et harva riskib üle 1%.');
+      $('psAction').innerHTML = '<b>Tegevus:</b> kaalu riskiprotsendi vähendamist 0,25-1% vahemikku, eriti kui konto on väiksem või setup pole väga kõrge veendumusega.';
+    } else if(outsideTypical){
+      setPsVerdict('neutral', 'VÄLJASPOOL TÜÜPILIST VAHEMIKKU', 'Positsioon on ' + positionPct.toFixed(1) + '% kontost — Kullamägi tüüpiline vahemik on 10-20%.');
+      $('psAction').innerHTML = '<b>Tegevus:</b> pole reegli rikkumine, aga kontrolli, kas see on kavatsuslik (nt väga kõrge veendumusega setup või teadlikult väiksem positsioon madala likviidsuse tõttu).';
+    } else {
+      setPsVerdict('bull', 'REEGLITE PIIRES', 'Risk ' + riskPct.toFixed(2) + '% ja positsioon ' + positionPct.toFixed(1) + '% kontost jäävad Kullamägi tüüpilistesse piiridesse.');
+      $('psAction').innerHTML = '<b>Tegevus:</b> osta ' + shares.toLocaleString('et-EE') + ' aktsiat. See vastab nii riskireeglile kui positsiooni suuruse tüüpilisele vahemikule.';
+    }
+  }
+
+  $('psCalcBtn').addEventListener('click', calculatePositionSize);
+
+  // ---------- Aktsia graafik (TradingView embed) ----------
+  let tvScriptLoading = null;
+
+  function loadTVScript(){
+    if(window.TradingView) return Promise.resolve();
+    if(tvScriptLoading) return tvScriptLoading;
+    tvScriptLoading = new Promise((resolve, reject)=>{
+      const s = document.createElement('script');
+      s.src = 'https://s3.tradingview.com/tv.js';
+      s.onload = () => resolve();
+      s.onerror = () => reject(new Error('TradingView skripti laadimine ebaõnnestus (kontrolli internetiühendust / kas oled väljaspool Claude.ai sandboxi).'));
+      document.body.appendChild(s);
+    });
+    return tvScriptLoading;
+  }
+
+  async function showChart(symbol){
+    symbol = symbol.trim().toUpperCase();
+    if(!symbol) return;
+    $('chartPanelWrap').style.display = 'block';
+    $('chartPanelSymbol').textContent = symbol + ' — päevagraafik';
+    $('tvChartContainer').innerHTML = '<div style="color:var(--muted);font-size:12px;padding:20px;">Laen graafikut…</div>';
+
+    try{
+      await loadTVScript();
+      $('tvChartContainer').innerHTML = '';
+      new TradingView.widget({
+        autosize: true,
+        symbol: symbol,
+        interval: 'D',
+        timezone: 'Etc/UTC',
+        theme: 'dark',
+        style: '1',
+        locale: 'en',
+        toolbar_bg: '#12151A',
+        enable_publishing: false,
+        hide_side_toolbar: false,
+        allow_symbol_change: true,
+        container_id: 'tvChartContainer'
+      });
+    }catch(e){
+      $('tvChartContainer').innerHTML = '<div style="color:var(--bear);font-size:12px;padding:20px;">' + e.message + '</div>';
+    }
+  }
+
+  $('resultsBody').addEventListener('click', (e)=>{
+    const td = e.target.closest('.tk');
+    if(td && td.dataset.sym) showChart(td.dataset.sym);
+  });
+  $('manualChartBtn').addEventListener('click', ()=> showChart($('manualChartSymbol').value));
+  $('manualChartSymbol').addEventListener('keydown', (e)=>{ if(e.key==='Enter') showChart($('manualChartSymbol').value); });
+  $('chartPanelClose').addEventListener('click', ()=>{ $('chartPanelWrap').style.display='none'; $('tvChartContainer').innerHTML=''; });
+})();
+</script>
+</body>
+</html>
