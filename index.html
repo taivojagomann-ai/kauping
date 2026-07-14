@@ -303,6 +303,13 @@
       <div style="font-size:11px;color:var(--muted)">Tasuta API tasemed on kiiruspiiratud — skann võtab kandidaadi kohta ~10-15 sek.</div>
     </div>
 
+    <div style="display:flex;gap:18px;flex-wrap:wrap;font-size:11px;color:var(--muted);background:var(--panel-2);border:1px solid var(--line);border-radius:4px;padding:8px 12px;margin-bottom:14px;">
+      <span><b style="color:var(--text);">Praegused kriteeriumid:</b></span>
+      <span>💵 Dollar volume ≥ <b style="color:var(--text);">$500K</b>/päev</span>
+      <span>📊 ADR ≥ <b style="color:var(--text);">3.5%</b></span>
+      <span>💲 Hind ≥ <b style="color:var(--text);">$1</b></span>
+    </div>
+
     <div class="progress" id="scanProgress"></div>
 
     <table id="resultsTable" style="display:none;">
@@ -328,7 +335,7 @@
       <span class="tl"><span class="tl-dot green"></span> Roheline — skoor ≥ 60: struktuur ja mahud toetavad, jälgi lähedalt</span>
       <span class="tl"><span class="tl-dot yellow"></span> Kollane — skoor 30–59: osaline setup, oota rohkem kinnitust</span>
       <span class="tl"><span class="tl-dot red"></span> Punane — skoor &lt; 30: praegu ei vasta Kullamägi kriteeriumidele</span>
-      <span class="tl">⚠ ADR% punane — alla ~3%, tüüpiliselt liiga vähe liikumisruumi breakout'i jaoks</span>
+      <span class="tl">⚠ ADR% punane — alla 3.5%, tüüpiliselt liiga vähe liikumisruumi breakout'i jaoks</span>
     </div>
     <div class="empty" id="resultsEmpty">Käivita ülal esmalt sentiment, seejärel vajuta "Skanni turgu".</div>
 
@@ -575,6 +582,20 @@
   // ---------- Rate limiting per provider ----------
   const DELAY_MS = { polygon: 13000, alphavantage: 13500, finnhub: 300 };
 
+  // Globaalne throttling-kaitse: kui erinevad nupud (akordioni "Värskenda seda", linnukesed,
+  // stopi muutmine jne) käivitavad päringuid kiiresti järjest, ootab see automaatselt piisavalt
+  // aega enne järgmist päringut, selle asemel et lasta serveril 429-ga tagasi lükata.
+  const lastApiCallTime = { polygon: 0, alphavantage: 0, finnhub: 0 };
+  async function respectRateLimit(provider){
+    const minGap = DELAY_MS[provider] || 0;
+    const elapsed = Date.now() - lastApiCallTime[provider];
+    if(elapsed < minGap){
+      await sleep(minGap - elapsed);
+    }
+    lastApiCallTime[provider] = Date.now();
+  }
+
+
   // ---------- Adapters: each returns ascending-by-date array of {t,o,h,l,c,v} ----------
   async function fetchJSON(url){
     const res = await fetch(url);
@@ -583,6 +604,7 @@
   }
 
   async function polygonDaily(symbol, key, days){
+    await respectRateLimit('polygon');
     const to = new Date();
     const from = new Date(); from.setDate(from.getDate() - (days||220));
     const fmt = d => d.toISOString().slice(0,10);
@@ -599,6 +621,7 @@
 
   async function polygonGroupedNear(key, baseDate, maxTriesBack){
     for(let i=0;i<=maxTriesBack;i++){
+      await respectRateLimit('polygon');
       const d = new Date(baseDate); d.setDate(d.getDate()-i);
       const iso = d.toISOString().slice(0,10);
       try{
@@ -620,13 +643,10 @@
     const base = new Date(); base.setDate(base.getDate()-1); // eilne, et vältida veel sulgemata päeva
 
     const snapToday = await polygonGroupedNear(key, base, 6);
-    await sleep(DELAY_MS.polygon);
     const d1 = new Date(base); d1.setDate(d1.getDate()-30);
     const snap1M = await polygonGroupedNear(key, d1, 6);
-    await sleep(DELAY_MS.polygon);
     const d3 = new Date(base); d3.setDate(d3.getDate()-91);
     const snap3M = await polygonGroupedNear(key, d3, 6);
-    await sleep(DELAY_MS.polygon);
     const d6 = new Date(base); d6.setDate(d6.getDate()-182);
     const snap6M = await polygonGroupedNear(key, d6, 6);
 
@@ -636,7 +656,8 @@
 
     const scored = [];
     for(const row of snapToday.rows){
-      if(row.c < 5 || row.v < 500000) continue;
+      const dollarVolume = row.c * row.v; // hind × maht = tegelik rahaline likviidsus, mitte ainult aktsiate arv
+      if(row.c < 1 || dollarVolume < 500000) continue; // $500K dollar volume lävi + minimaalne $1 hinnapõrand OTC-prügi vältimiseks
       const c1 = map1.get(row.sym), c3 = map3.get(row.sym), c6 = map6.get(row.sym);
       if(!c1 || !c3 || !c6) continue;
       const pct1M = (row.c-c1)/c1*100;
@@ -651,6 +672,7 @@
   }
 
   async function alphaDaily(symbol, key, full){
+    await respectRateLimit('alphavantage');
     const url = `https://www.alphavantage.co/query?function=TIME_SERIES_DAILY&symbol=${symbol}&outputsize=${full?'full':'compact'}&apikey=${key}`;
     const data = await fetchJSON(url);
     const series = data['Time Series (Daily)'];
@@ -662,6 +684,7 @@
   }
 
   async function alphaTopGainers(key){
+    await respectRateLimit('alphavantage');
     const url = `https://www.alphavantage.co/query?function=TOP_GAINERS_LOSERS&apikey=${key}`;
     const data = await fetchJSON(url);
     if(!data.top_gainers) throw new Error(data['Note'] || data['Information'] || 'Alpha Vantage top gainers puudub — kontrolli võtit.');
@@ -669,6 +692,7 @@
   }
 
   async function finnhubQuote(symbol, key){
+    await respectRateLimit('finnhub');
     const url = `https://finnhub.io/api/v2/quote?symbol=${symbol}&token=${key}`;
     const data = await fetchJSON(url);
     return data; // {c: current, pc: prev close, ...}
@@ -777,7 +801,6 @@
         $(symbol+'-error').textContent = e.message;
         kinds.push(null);
       }
-      if(i < SENTIMENT_INDICES.length-1) await sleep(DELAY_MS[provider]);
     }
 
     const bullCount = kinds.filter(k=>k==='bull').length;
@@ -884,7 +907,6 @@
           results.push({name:s.name, sym:s.sym, pct1M, pct3M, trendUp, composite});
         }
       }catch(e){ skipped.push(s.sym + ': ' + e.message); }
-      if(i < SECTOR_LIST.length-1) await sleep(DELAY_MS[provider]);
     }
 
     setSectorProgress('Valmis.' + (skipped.length ? (' Vahele jäid: ' + skipped.join(' | ')) : ''), 100);
@@ -919,7 +941,7 @@
     for(let i=n-adrPeriod;i<n;i++) adrSum += (highs[i]-lows[i]);
     const adr = adrSum/adrPeriod;
     const adrPct = (adr/last.c)*100;
-    const lowADR = adrPct < 3; // levinud juhis: alla ~3% ADR tähendab liiga vähe liikumisruumi breakout'i jaoks
+    const lowADR = adrPct < 3.5; // täpsem allikas: Kullamägi filtreerib ADR üle 5%, kasutame veidi leebemat 3.5% läve
 
     const volPeriod = Math.min(20, n-1);
     let volSum=0;
@@ -1039,7 +1061,6 @@
         setProgress('Alpha Vantage: kasutan päeva top-gainers nimekirja kandidaatide algfiltrina (API piirangu tõttu ei ole täit 1/3/6-kuu turuskänni võimalik teha)…', 5);
         const gainers = await alphaTopGainers(key);
         symbols = gainers.slice(0,count).map(g=>g.sym);
-        await sleep(DELAY_MS.alphavantage);
       } else {
         // finnhub limited mode
         setProgress('Finnhub piiratud režiim: järjestan kureeritud nimekirja hetkehinna muutuse järgi…', 5);
@@ -1053,7 +1074,6 @@
             }
           }catch(e){}
           setProgress(`Kontrollin ${s}… (${i+1}/${FINNHUB_UNIVERSE.length})`, ((i+1)/FINNHUB_UNIVERSE.length)*100);
-          await sleep(DELAY_MS.finnhub);
         }
         quotes.sort((a,b)=>b.chg-a.chg);
         const top = quotes.slice(0,count);
@@ -1081,7 +1101,6 @@
           if(a) results.push({sym, a});
           else skipped.push(sym + ': liiga vähe ajaloolisi andmepunkte (<25 päeva)');
         }catch(e){ skipped.push(sym + ': ' + e.message); }
-        if(i < symbols.length-1) await sleep(DELAY_MS[provider]);
       }
 
       if(results.length === 0 && skipped.length){
@@ -1434,7 +1453,6 @@
         pos.lastAnalysis = null;
         pos.lastError = e.message;
       }
-      if(i < positions.length-1) await sleep(DELAY_MS[provider]);
     }
     savePositionsToStorage(positions);
     setPositionsProgress('Valmis.', 100);
