@@ -1265,8 +1265,21 @@
       const tlLabel = a ? a.label : (p.lastError ? 'VIGA' : 'Pole analüüsitud');
 
       let bodyHtml;
+      const editRow = `
+        <div style="display:flex;gap:16px;flex-wrap:wrap;align-items:center;padding:10px 0;border-bottom:1px dashed var(--line);margin-bottom:8px;">
+          <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text);font-weight:normal;text-transform:none;letter-spacing:0;">
+            <input type="checkbox" class="pos-partial-toggle" data-id="${p.id}" style="width:auto;" ${p.partialSold?'checked':''} />
+            Osa positsioonist juba müüdud (stop → breakeven)
+          </label>
+          <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--muted);font-weight:normal;text-transform:none;letter-spacing:0;">
+            Stop:
+            <input type="number" class="pos-stop-edit" data-id="${p.id}" value="${p.initialStop}" step="0.01" style="width:80px;background:var(--panel-2);border:1px solid var(--line);color:var(--text);padding:4px 6px;border-radius:4px;font-family:inherit;font-size:12px;" />
+          </label>
+          <button class="btn btn-ghost pos-refresh-one" data-id="${p.id}" style="padding:4px 10px;font-size:11px;">Värskenda seda</button>
+        </div>
+      `;
       if(a){
-        bodyHtml = `
+        bodyHtml = editRow + `
           <div class="ma-row"><span class="k">Praegune hind</span><span>$${a.currentPrice.toFixed(2)}</span></div>
           <div class="ma-row"><span class="k">R (risk aktsia kohta)</span><span>$${a.R.toFixed(2)}</span></div>
           <div class="ma-row"><span class="k">Praegune kasum</span><span>${(a.profitR>=0?'+':'')+a.profitR.toFixed(2)}R ($${a.profitPerShare.toFixed(2)})</span></div>
@@ -1278,7 +1291,7 @@
           <div class="notice show" style="margin-top:10px;">${a.actionHtml}</div>
         `;
       } else {
-        bodyHtml = `<div style="color:var(--muted);font-size:12px;padding:10px 0;">${p.lastError || 'Vajuta "Värskenda kõik", et analüüsida.'}</div>`;
+        bodyHtml = editRow + `<div style="color:var(--muted);font-size:12px;padding:10px 0;">${p.lastError || 'Vajuta "Värskenda seda" või "Värskenda kõik", et analüüsida.'}</div>`;
       }
 
       const card = document.createElement('div');
@@ -1298,6 +1311,28 @@
     });
   }
 
+  async function refreshOnePosition(id){
+    const provider = providerSel.value;
+    const key = apikeyInput.value.trim();
+    if(!key){ alert('Sisesta oma API võti.'); return; }
+    if(provider === 'finnhub'){ alert('Finnhub tasuta tase ei anna ajaloolisi küünlaid — vali Polygon või Alpha Vantage.'); return; }
+
+    let positions = loadPositions();
+    const pos = positions.find(p=>p.id===id);
+    if(!pos) return;
+
+    try{
+      const bars = provider==='polygon' ? await polygonDaily(pos.symbol, key, 90) : await alphaDaily(pos.symbol, key, false);
+      pos.lastAnalysis = computePositionAnalysis(bars, pos.entry, pos.dateStr, pos.initialStop, pos.maPeriod, pos.partialSold);
+      pos.lastError = null;
+    }catch(e){
+      pos.lastAnalysis = null;
+      pos.lastError = e.message;
+    }
+    savePositionsToStorage(positions);
+    renderPositionsList();
+  }
+
   $('positionsList').addEventListener('click', (e)=>{
     const removeBtn = e.target.closest('[data-remove]');
     if(removeBtn){
@@ -1308,11 +1343,45 @@
       renderPositionsList();
       return;
     }
+    const refreshOneBtn = e.target.closest('.pos-refresh-one');
+    if(refreshOneBtn){
+      refreshOnePosition(refreshOneBtn.dataset.id);
+      return;
+    }
     const header = e.target.closest('.pos-card-header');
     if(header){
       const id = header.dataset.id;
       expandedPositionId = (expandedPositionId === id) ? null : id;
       renderPositionsList();
+    }
+  });
+
+  // Muudatused (osa müüdud linnuke, stopi väärtus) salvestatakse kohe ja positsioon värskendatakse automaatselt.
+  $('positionsList').addEventListener('change', (e)=>{
+    const toggle = e.target.closest('.pos-partial-toggle');
+    if(toggle){
+      const id = toggle.dataset.id;
+      const positions = loadPositions();
+      const pos = positions.find(p=>p.id===id);
+      if(pos){
+        pos.partialSold = toggle.checked;
+        savePositionsToStorage(positions);
+        refreshOnePosition(id);
+      }
+      return;
+    }
+    const stopEdit = e.target.closest('.pos-stop-edit');
+    if(stopEdit){
+      const id = stopEdit.dataset.id;
+      const newStop = parseFloat(stopEdit.value);
+      if(isNaN(newStop)){ alert('Sisesta korrektne stopi väärtus.'); return; }
+      const positions = loadPositions();
+      const pos = positions.find(p=>p.id===id);
+      if(pos){
+        pos.initialStop = newStop;
+        savePositionsToStorage(positions);
+        refreshOnePosition(id);
+      }
     }
   });
 
@@ -1340,22 +1409,7 @@
     expandedPositionId = newPos.id;
     renderPositionsList();
 
-    // Analüüsi kohe värskelt, kui API võti on olemas
-    const key = apikeyInput.value.trim();
-    const provider = providerSel.value;
-    if(key && provider !== 'finnhub'){
-      try{
-        const bars = provider==='polygon' ? await polygonDaily(symbol, key, 90) : await alphaDaily(symbol, key, false);
-        newPos.lastAnalysis = computePositionAnalysis(bars, entry, dateStr, initialStop, maPeriod, partialSold);
-        newPos.lastError = null;
-      }catch(e){
-        newPos.lastAnalysis = null;
-        newPos.lastError = e.message;
-      }
-      const updated = loadPositions().map(p => p.id === newPos.id ? newPos : p);
-      savePositionsToStorage(updated);
-      renderPositionsList();
-    }
+    if(apikeyInput.value.trim()) await refreshOnePosition(newPos.id);
   });
 
   async function refreshAllPositions(){
