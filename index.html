@@ -1155,10 +1155,15 @@
       const partialProfitReached = profitR >= 2;
       const partialDue = !partialSold && (partialWindowReached || partialProfitReached);
 
-      if(closeBelowStop || closeBelowMA){
+      // TÄHTIS: trailing MA on väljumistrigger AINULT pärast osalist müüki (trailing-faasis).
+      // Enne seda on ainus kehtiv trigger aktiivne stop — MA-l alla olemine kahjumis positsioonis,
+      // mis pole kunagi kasumis olnud, EI ole Kullamägi meetodi järgi väljumissignaal.
+      const maExitApplies = partialSold && closeBelowMA;
+
+      if(closeBelowStop || maExitApplies){
         setPosVerdict('bear', 'VÄLJU', closeBelowStop
           ? 'Sulgemishind on all su stopist ($' + activeStop.toFixed(2) + ') — sule positsioon vastavalt reeglile.'
-          : 'Sulgemishind ($' + currentPrice.toFixed(2) + ') on allpool ' + maPeriod + 'p SMA-d ($' + maValue.toFixed(2) + ') — Kullamägi reegli järgi väljumistrigger on käivitunud.');
+          : 'Sulgemishind ($' + currentPrice.toFixed(2) + ') on allpool ' + maPeriod + 'p SMA-d ($' + maValue.toFixed(2) + ') pärast osalist müüki — trailing-stop trigger on käivitunud.');
         $('posAction').innerHTML = '<b>Tegevus:</b> sule positsioon (või ülejäänud osa) täna, kui sulgemishind kinnitab allpool taset. See on distsipliini koht, kus enamik kauplejaid reegleid eirab.';
       } else if(partialDue){
         setPosVerdict('neutral', 'MÜÜ OSA NÜÜD', partialWindowReached
@@ -1168,6 +1173,9 @@
       } else if(partialSold){
         setPosVerdict('bull', 'HOIA — TRAIL', 'Osa on juba müüdud, stop on breakeven\'il. Ülejäänud positsiooni jälgitakse ' + maPeriod + 'p SMA-ga ($' + maValue.toFixed(2) + ') — väljud, kui sulgemishind langeb sellest allapoole.');
         $('posAction').innerHTML = '<b>Tegevus:</b> hoia ülejäänud positsiooni. Kontrolli iga päev, kas sulgemishind on ' + maPeriod + 'p SMA all — see on sinu järgmine väljumistrigger.';
+      } else if(profitR < 0){
+        setPosVerdict('neutral', 'HOIA — KAHJUMIS', 'Positsioon on hetkel ' + profitR.toFixed(2) + 'R kahjumis, aga pole veel jõudnud stopini ($' + activeStop.toFixed(2) + '). Trailing MA ($' + maValue.toFixed(2) + ') ei ole veel asjakohane, kuna positsioon pole olnud kasumis.');
+        $('posAction').innerHTML = '<b>Tegevus:</b> hoia, kuni hind kas taastub või langeb allapoole aktiivset stopi ($' + activeStop.toFixed(2) + '). Ainuke kehtiv väljumistrigger praegu on see stop-tase.';
       } else {
         setPosVerdict('bull', 'HOIA', 'Tehing areneb plaanipäraselt. Kasum on ' + profitR.toFixed(2) + 'R, veel pole jõutud osalise müügi hetkeni (3-5 päeva või 2R).');
         $('posAction').innerHTML = '<b>Tegevus:</b> hoia täies mahus, jälgi stopi taset ($' + activeStop.toFixed(2) + ') ja jälgi, millal jõuad 3-5 päeva või 2R kasumi lävendini.';
