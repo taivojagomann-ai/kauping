@@ -246,6 +246,31 @@
         <div style="font-size:11px;color:var(--bear);margin-top:6px;" id="IWM-error"></div>
       </div>
     </div>
+
+    <div style="margin-top:20px;padding-top:16px;border-top:1px dashed var(--line);">
+      <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:12px;">
+        <div>
+          <div class="eyebrow">Sektori tugevus</div>
+          <div style="font-size:11px;color:var(--muted);margin-top:2px;">11 sektori ETF-i, 1-kuu/3-kuu tootlus + trendikinnitus. API piirmäära tõttu võtab ~2-3 min.</div>
+        </div>
+        <button class="btn btn-ghost" id="sectorBtn">Vaata sektoreid</button>
+      </div>
+      <div class="progress" id="sectorProgress"></div>
+      <table id="sectorTable" style="display:none;">
+        <thead>
+          <tr>
+            <th>Sektor</th>
+            <th>Ticker</th>
+            <th>1-kuu %</th>
+            <th>3-kuu %</th>
+            <th>Trend (10p vs 20p)</th>
+            <th>Staatus</th>
+          </tr>
+        </thead>
+        <tbody id="sectorBody"></tbody>
+      </table>
+      <div class="empty" id="sectorEmpty">Vajuta "Vaata sektoreid", et näha, millised sektorid on hetkel kuumad.</div>
+    </div>
   </section>
 
   <!-- BLOCK 2: SCANNER -->
@@ -508,7 +533,7 @@
 
   const PROVIDER_NOTES = {
     polygon: "Polygon (nüüd 'Massive.com'): kandidaadid leitakse õigelt Kullamägi meetodilt — 1/3/6-kuu liidrid (4 turusnapshot'i, mitte päeva top-gainers). TÄHELEPANU: allikad on vastuolulised, kas tasuta tase (5 päringut/min) veel eksisteerib pärast rebrändi — kontrolli kindlasti otse polygon.io lehelt enne kasutamist.",
-    alphavantage: "Alpha Vantage: kuna neil pole tasuta bulk-endpoint'i kogu turu ajaloo jaoks, kasutame kandidaatide algfiltrina nende TOP_GAINERS_LOSERS (päevapõhine) nimekirja — see EI ole täpselt Kullamägi 1/3/6-kuu meetod, vaid parim võimalik lähend antud API piirangutega. Kindlalt tasuta, aga kitsas (~25 päringut/päevas, 5/min).",
+    alphavantage: "Alpha Vantage: kuna neil pole tasuta bulk-endpoint'i kogu turu ajaloo jaoks, kasutame kandidaatide algfiltrina nende TOP_GAINERS_LOSERS (päevapõhine) nimekirja — see EI ole täpselt Kullamägi 1/3/6-kuu meetod, vaid parim võimalik lähend antud API piirangutega. Lisaks: 'outputsize=full' (mis annaks pika ajaloo 6-kuu arvutuseks) on nüüd Alpha Vantage'il premium-only — tasuta tasemel saame ~100 päeva ajalugu (compact), mistõttu 6-kuu % veerg jääb tasuta võtmega N/A. Kindlalt tasuta, aga kitsas (~25 päringut/päevas, 5/min).",
     finnhub: "Finnhub: tasuta tase enam ei toeta ajaloolisi küünlaid aktsiate jaoks (ainult hetkehind /quote kaudu). Seetõttu töötab siin ainult lihtne päevamuutuse järjestus — ADR, konsolideerumine ja SMA arvutused EI ole võimalikud. Täisfunktsionaalsuse jaoks vali Alpha Vantage."
   };
 
@@ -740,6 +765,106 @@
     scanBtn.disabled = false;
   }
 
+  // ---------- Sector strength (separate button, own rate-limited loop) ----------
+  const SECTOR_LIST = [
+    {name:'Tehnoloogia', sym:'XLK'},
+    {name:'Finants', sym:'XLF'},
+    {name:'Energia', sym:'XLE'},
+    {name:'Tervishoid', sym:'XLV'},
+    {name:'Tööstus', sym:'XLI'},
+    {name:'Tarbija (tsükliline)', sym:'XLY'},
+    {name:'Tarbija (baas)', sym:'XLP'},
+    {name:'Kommunaalteenused', sym:'XLU'},
+    {name:'Materjalid', sym:'XLB'},
+    {name:'Kommunikatsioon', sym:'XLC'},
+    {name:'Kinnisvara', sym:'XLRE'}
+  ];
+
+  function setSectorProgress(text, pct){
+    $('sectorProgress').innerHTML = text + `<div class="bar"><i style="width:${pct}%"></i></div>`;
+  }
+
+  function renderSectorTable(rows){
+    const tbody = $('sectorBody');
+    tbody.innerHTML = '';
+    if(!rows.length){
+      $('sectorTable').style.display = 'none';
+      $('sectorEmpty').style.display = 'block';
+      $('sectorEmpty').textContent = 'Sektorite andmeid ei õnnestunud laadida.';
+      return;
+    }
+    $('sectorTable').style.display = 'table';
+    $('sectorEmpty').style.display = 'none';
+
+    rows.sort((a,b)=>b.composite-a.composite);
+    rows.forEach((r,i)=>{
+      const tr = document.createElement('tr');
+      const isHot = i < 3;
+      const isCold = i >= rows.length-3;
+      const statusCls = isHot ? 'green' : (isCold ? 'red' : 'yellow');
+      const statusTxt = isHot ? '🔥 Kuum' : (isCold ? '❄️ Külm' : '— Neutraalne');
+      const fmtPct = v => v===null ? 'N/A' : ((v>=0?'+':'')+v.toFixed(1)+'%');
+      const pctCls = v => v===null ? '' : (v>=0?'pos':'neg');
+      tr.innerHTML = `
+        <td>${r.name}</td>
+        <td class="tk" data-sym="${r.sym}" style="cursor:pointer;text-decoration:underline dotted;">${r.sym}</td>
+        <td class="${pctCls(r.pct1M)}">${fmtPct(r.pct1M)}</td>
+        <td class="${pctCls(r.pct3M)}">${fmtPct(r.pct3M)}</td>
+        <td>${r.trendUp ? '🔼 tõusev' : '🔽 langev'}</td>
+        <td><span class="tl"><span class="tl-dot ${statusCls}"></span><span class="tl-text ${statusCls}">${statusTxt}</span></span></td>
+      `;
+      tbody.appendChild(tr);
+    });
+  }
+
+  async function runSectorScan(){
+    const provider = providerSel.value;
+    const key = apikeyInput.value.trim();
+    const sectorBtn = $('sectorBtn');
+
+    if(!key){ alert('Sisesta oma API võti.'); return; }
+    if(provider === 'finnhub'){
+      setSectorProgress('Finnhub tasuta tase ei anna ajaloolisi küünlaid — vali Polygon või Alpha Vantage.', 0);
+      return;
+    }
+
+    sectorBtn.disabled = true;
+    const results = [];
+    const skipped = [];
+
+    for(let i=0;i<SECTOR_LIST.length;i++){
+      const s = SECTOR_LIST[i];
+      setSectorProgress(`Analüüsin ${s.name} (${s.sym})… (${i+1}/${SECTOR_LIST.length})`, (i/SECTOR_LIST.length)*100);
+      try{
+        const bars = provider==='polygon' ? await polygonDaily(s.sym, key, 120) : await alphaDaily(s.sym, key, false);
+        if(bars.length < 21){ skipped.push(s.sym + ': liiga vähe andmepunkte'); }
+        else{
+          const closes = bars.map(b=>b.c);
+          const n = closes.length;
+          const s10 = sma(closes,10), s20 = sma(closes,20);
+          const idx1 = Math.max(0, n-22);
+          const pct1M = ((closes[n-1]-closes[idx1])/closes[idx1])*100;
+          const idx3 = n-63;
+          const pct3M = idx3>=0 ? ((closes[n-1]-closes[idx3])/closes[idx3])*100 : null;
+          const trendUp = s10 > s20;
+          const composite = pct1M*0.6 + (pct3M||0)*0.4;
+          results.push({name:s.name, sym:s.sym, pct1M, pct3M, trendUp, composite});
+        }
+      }catch(e){ skipped.push(s.sym + ': ' + e.message); }
+      if(i < SECTOR_LIST.length-1) await sleep(DELAY_MS[provider]);
+    }
+
+    setSectorProgress('Valmis.' + (skipped.length ? (' Vahele jäid: ' + skipped.join(' | ')) : ''), 100);
+    renderSectorTable(results);
+    sectorBtn.disabled = false;
+  }
+
+  $('sectorBtn').addEventListener('click', runSectorScan);
+  $('sectorBody').addEventListener('click', (e)=>{
+    const td = e.target.closest('.tk');
+    if(td && td.dataset.sym) showChart(td.dataset.sym);
+  });
+
   // ---------- Scanner analysis ----------
   function analyze(bars){
     if(bars.length < 25) return null;
@@ -913,7 +1038,7 @@
         setProgress(`Analüüsin ${sym}… (${i+1}/${symbols.length})`, ((i)/symbols.length)*100);
         try{
           // ~220 kalendripäeva tagab piisavalt andmeid ka 6-kuu (~126 kauplemispäeva) arvutuseks
-          const bars = provider==='polygon' ? await polygonDaily(sym, key, 220) : await alphaDaily(sym, key, true);
+          const bars = provider==='polygon' ? await polygonDaily(sym, key, 220) : await alphaDaily(sym, key, false);
           const a = analyze(bars);
           if(a) results.push({sym, a});
           else skipped.push(sym + ': liiga vähe ajaloolisi andmepunkte (<25 päeva)');
