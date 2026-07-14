@@ -219,6 +219,7 @@
         <div class="ma-row"><span class="k">20p SMA</span><span id="SPY-sma20">—</span></div>
         <div class="ma-row"><span class="k">Vahe</span><span id="SPY-smaGap">—</span></div>
         <div class="chart-wrap" id="SPY-chartWrap"></div>
+        <div style="font-size:11px;color:var(--bear);margin-top:6px;" id="SPY-error"></div>
       </div>
       <div class="index-card" data-symbol="QQQ">
         <div class="index-card-head">
@@ -230,6 +231,7 @@
         <div class="ma-row"><span class="k">20p SMA</span><span id="QQQ-sma20">—</span></div>
         <div class="ma-row"><span class="k">Vahe</span><span id="QQQ-smaGap">—</span></div>
         <div class="chart-wrap" id="QQQ-chartWrap"></div>
+        <div style="font-size:11px;color:var(--bear);margin-top:6px;" id="QQQ-error"></div>
       </div>
       <div class="index-card" data-symbol="IWM">
         <div class="index-card-head">
@@ -241,6 +243,7 @@
         <div class="ma-row"><span class="k">20p SMA</span><span id="IWM-sma20">—</span></div>
         <div class="ma-row"><span class="k">Vahe</span><span id="IWM-smaGap">—</span></div>
         <div class="chart-wrap" id="IWM-chartWrap"></div>
+        <div style="font-size:11px;color:var(--bear);margin-top:6px;" id="IWM-error"></div>
       </div>
     </div>
   </section>
@@ -710,8 +713,10 @@
       try{
         const kind = await loadOneIndex(symbol, provider, key);
         kinds.push(kind);
+        $(symbol+'-error').textContent = '';
       }catch(e){
         setIndexTL(symbol, 'idle', 'VIGA');
+        $(symbol+'-error').textContent = e.message;
         kinds.push(null);
       }
       if(i < SENTIMENT_INDICES.length-1) await sleep(DELAY_MS[provider]);
@@ -899,9 +904,10 @@
         return;
       }
 
-      if(!symbols.length) throw new Error('Kandidaate ei leitud.');
+      if(!symbols.length) throw new Error('Kandidaate ei leitud (samm 1 — 1/3/6-kuu liidrite otsing andis tühja tulemuse).');
 
       const results = [];
+      const skipped = [];
       for(let i=0;i<symbols.length;i++){
         const sym = symbols[i];
         setProgress(`Analüüsin ${sym}… (${i+1}/${symbols.length})`, ((i)/symbols.length)*100);
@@ -910,10 +916,16 @@
           const bars = provider==='polygon' ? await polygonDaily(sym, key, 220) : await alphaDaily(sym, key, true);
           const a = analyze(bars);
           if(a) results.push({sym, a});
-        }catch(e){ /* skip symbol on error */ }
+          else skipped.push(sym + ': liiga vähe ajaloolisi andmepunkte (<25 päeva)');
+        }catch(e){ skipped.push(sym + ': ' + e.message); }
         if(i < symbols.length-1) await sleep(DELAY_MS[provider]);
       }
-      setProgress('Valmis.', 100);
+
+      if(results.length === 0 && skipped.length){
+        setProgress('Valmis, aga kõik kandidaadid jäid välja. Põhjused: ' + skipped.join(' | '), 100);
+      } else {
+        setProgress('Valmis.' + (skipped.length ? (' (' + skipped.length + ' kandidaati jäeti vahele: ' + skipped.join(' | ') + ')') : ''), 100);
+      }
       renderResults(results);
     }catch(e){
       setProgress('Viga: ' + e.message, 0);
