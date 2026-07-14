@@ -452,14 +452,17 @@
   function sleep(ms){ return new Promise(r=>setTimeout(r,ms)); }
 
   // ---------- Persistent key storage (personal, not shared) ----------
+  // Kasutab tavalist brauseri localStorage'i, mis töötab GitHub Pages'il / igal pärisveebisaidil.
+  // (window.storage API töötaks ainult Claude.ai artefaktide sees, mistõttu see asendati.)
   const rememberBox = $('rememberKey');
   const clearKeyBtn = $('clearKeyBtn');
+  const STORAGE_KEY = 'tape-and-base:apikey';
 
-  async function loadSavedKey(){
+  function loadSavedKey(){
     try{
-      const res = await window.storage.get('tape-and-base:apikey', false);
-      if(res && res.value){
-        const saved = JSON.parse(res.value);
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if(raw){
+        const saved = JSON.parse(raw);
         apikeyInput.value = saved.key || '';
         if(saved.provider) providerSel.value = saved.provider;
         rememberBox.checked = true;
@@ -467,27 +470,27 @@
         updateNotice();
       }
     }catch(e){
-      // no saved key yet — that's fine, nothing to load
+      // pole veel midagi salvestatud — pole probleem
     }
   }
 
-  async function saveKey(){
+  function saveKey(){
     if(!rememberBox.checked) return;
     try{
-      await window.storage.set('tape-and-base:apikey', JSON.stringify({
+      localStorage.setItem(STORAGE_KEY, JSON.stringify({
         key: apikeyInput.value.trim(),
         provider: providerSel.value
-      }), false);
+      }));
       clearKeyBtn.style.display = 'inline-block';
     }catch(e){
       console.error('Salvestamine ebaõnnestus:', e);
     }
   }
 
-  async function clearSavedKey(){
+  function clearSavedKey(){
     try{
-      await window.storage.delete('tape-and-base:apikey', false);
-    }catch(e){ /* already empty, fine */ }
+      localStorage.removeItem(STORAGE_KEY);
+    }catch(e){ /* juba tühi, pole probleem */ }
     apikeyInput.value = '';
     rememberBox.checked = false;
     clearKeyBtn.style.display = 'none';
