@@ -286,6 +286,31 @@
       </table>
       <div class="empty" id="sectorEmpty">Vajuta "Vaata sektoreid", et näha, millised sektorid on hetkel kuumad.</div>
     </div>
+
+    <div style="margin-top:20px;padding-top:16px;border-top:1px dashed var(--line);">
+      <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:12px;">
+        <div>
+          <div class="eyebrow">AI-sektori aktsiad</div>
+          <div style="font-size:11px;color:var(--muted);margin-top:2px;">Kiibid, mälu, foundry, võrgustik, toide/jahutus, hüperskaalerid. API piirmäära tõttu võtab ~3-4 min.</div>
+        </div>
+        <button class="btn btn-ghost" id="aiStocksBtn">Vaata AI aktsiaid</button>
+      </div>
+      <div class="progress" id="aiStocksProgress"></div>
+      <table id="aiStocksTable" style="display:none;">
+        <thead>
+          <tr>
+            <th>Kategooria</th>
+            <th>Ticker</th>
+            <th>Hind</th>
+            <th>1-kuu %</th>
+            <th>3-kuu %</th>
+            <th>Trend (10p vs 20p)</th>
+          </tr>
+        </thead>
+        <tbody id="aiStocksBody"></tbody>
+      </table>
+      <div class="empty" id="aiStocksEmpty">Vajuta "Vaata AI aktsiaid", et näha kõiki kategooriaid korraga.</div>
+    </div>
   </section>
 
   <!-- BLOCK 2: SCANNER -->
@@ -1029,6 +1054,98 @@
 
   $('sectorBtn').addEventListener('click', runSectorScan);
   $('sectorBody').addEventListener('click', (e)=>{
+    const td = e.target.closest('.tk');
+    if(td && td.dataset.sym) showChart(td.dataset.sym);
+  });
+
+  // ---------- AI-sector stocks watchlist (separate button, own rate-limited loop) ----------
+  const AI_STOCK_CATEGORIES = [
+    { category:'Kiibid / GPU', tickers:['NVDA','AMD','AVGO'] },
+    { category:'Mälu', tickers:['MU','SNDK','WDC'] },
+    { category:'Foundry / pakendamine', tickers:['TSM','AMKR'] },
+    { category:'Võrgustik', tickers:['ANET','MRVL'] },
+    { category:'Toide / jahutus', tickers:['ETN','GEV'] },
+    { category:'Hüperskaalerid', tickers:['GOOG','MSFT','AMZN','META','ORCL'] }
+  ];
+  const AI_STOCK_LIST = AI_STOCK_CATEGORIES.flatMap(c => c.tickers.map(sym => ({category:c.category, sym})));
+
+  function setAIStocksProgress(text, pct){
+    $('aiStocksProgress').innerHTML = text + `<div class="bar"><i style="width:${pct}%"></i></div>`;
+  }
+
+  function renderAIStocksTable(rows){
+    const tbody = $('aiStocksBody');
+    tbody.innerHTML = '';
+    if(!rows.length){
+      $('aiStocksTable').style.display = 'none';
+      $('aiStocksEmpty').style.display = 'block';
+      $('aiStocksEmpty').textContent = 'AI-aktsiate andmeid ei õnnestunud laadida.';
+      return;
+    }
+    $('aiStocksTable').style.display = 'table';
+    $('aiStocksEmpty').style.display = 'none';
+
+    let lastCategory = null;
+    rows.forEach(r=>{
+      const tr = document.createElement('tr');
+      const fmtPct = v => v===null ? 'N/A' : ((v>=0?'+':'')+v.toFixed(1)+'%');
+      const pctCls = v => v===null ? '' : (v>=0?'pos':'neg');
+      const showCategory = r.category !== lastCategory;
+      lastCategory = r.category;
+      tr.innerHTML = `
+        <td style="${showCategory?'font-weight:600;color:var(--text);':'color:var(--muted);'}">${showCategory ? r.category : ''}</td>
+        <td class="tk" data-sym="${r.sym}" style="cursor:pointer;text-decoration:underline dotted;">${r.sym}</td>
+        <td>$${r.price.toFixed(2)}</td>
+        <td class="${pctCls(r.pct1M)}">${fmtPct(r.pct1M)}</td>
+        <td class="${pctCls(r.pct3M)}">${fmtPct(r.pct3M)}</td>
+        <td>${r.trendUp ? '🔼 tõusev' : '🔽 langev'}</td>
+      `;
+      tbody.appendChild(tr);
+    });
+  }
+
+  async function runAIStocksScan(){
+    const provider = providerSel.value;
+    const key = apikeyInput.value.trim();
+    const btn = $('aiStocksBtn');
+
+    if(!key){ alert('Sisesta oma API võti.'); return; }
+    if(provider === 'finnhub'){
+      setAIStocksProgress('Finnhub tasuta tase ei anna ajaloolisi küünlaid — vali Polygon või Alpha Vantage.', 0);
+      return;
+    }
+
+    btn.disabled = true;
+    const results = [];
+    const skipped = [];
+
+    for(let i=0;i<AI_STOCK_LIST.length;i++){
+      const item = AI_STOCK_LIST[i];
+      setAIStocksProgress(`Analüüsin ${item.sym} (${item.category})… (${i+1}/${AI_STOCK_LIST.length})`, (i/AI_STOCK_LIST.length)*100);
+      try{
+        const bars = provider==='polygon' ? await polygonDaily(item.sym, key, 120) : await alphaDaily(item.sym, key, false);
+        if(bars.length < 21){ skipped.push(item.sym + ': liiga vähe andmepunkte'); }
+        else{
+          const closes = bars.map(b=>b.c);
+          const n = closes.length;
+          const s10 = sma(closes,10), s20 = sma(closes,20);
+          const idx1 = Math.max(0, n-22);
+          const pct1M = ((closes[n-1]-closes[idx1])/closes[idx1])*100;
+          const idx3 = n-63;
+          const pct3M = idx3>=0 ? ((closes[n-1]-closes[idx3])/closes[idx3])*100 : null;
+          const trendUp = s10 > s20;
+          results.push({category:item.category, sym:item.sym, price:closes[n-1], pct1M, pct3M, trendUp});
+        }
+      }catch(e){ skipped.push(item.sym + ': ' + e.message); }
+    }
+
+    setAIStocksProgress('Valmis.' + (skipped.length ? (' Vahele jäid: ' + skipped.join(' | ')) : ''), 100);
+    renderAIStocksTable(results);
+    btn.disabled = false;
+  }
+
+  $('aiStocksBtn').addEventListener('click', runAIStocksScan);
+  $('aiStocksBody').addEventListener('click', (e)=>{
     const td = e.target.closest('.tk');
     if(td && td.dataset.sym) showChart(td.dataset.sym);
   });
