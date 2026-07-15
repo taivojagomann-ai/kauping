@@ -221,19 +221,6 @@
     </div>
 
     <div class="index-grid" id="indexGrid">
-      <div class="index-card" data-symbol="SPY">
-        <div class="index-card-head">
-          <span class="index-name">SPY — S&amp;P 500</span>
-          <span class="tl" id="SPY-tl"><span class="tl-dot yellow"></span><span class="tl-text yellow">OOTEL</span></span>
-        </div>
-        <div class="ma-row"><span class="k">Sulgemishind</span><span id="SPY-lastClose">—</span></div>
-        <div class="ma-row"><span class="k">10p SMA</span><span id="SPY-sma10">—</span></div>
-        <div class="ma-row"><span class="k">20p SMA</span><span id="SPY-sma20">—</span></div>
-        <div class="ma-row"><span class="k">50p SMA</span><span id="SPY-sma50">—</span></div>
-        <div class="ma-row"><span class="k">Vahe</span><span id="SPY-smaGap">—</span></div>
-        <div class="chart-wrap" id="SPY-chartWrap"></div>
-        <div style="font-size:11px;color:var(--bear);margin-top:6px;" id="SPY-error"></div>
-      </div>
       <div class="index-card" data-symbol="QQQ">
         <div class="index-card-head">
           <span class="index-name">QQQ — Nasdaq 100</span>
@@ -246,6 +233,19 @@
         <div class="ma-row"><span class="k">Vahe</span><span id="QQQ-smaGap">—</span></div>
         <div class="chart-wrap" id="QQQ-chartWrap"></div>
         <div style="font-size:11px;color:var(--bear);margin-top:6px;" id="QQQ-error"></div>
+      </div>
+      <div class="index-card" data-symbol="SPY">
+        <div class="index-card-head">
+          <span class="index-name">SPY — S&amp;P 500</span>
+          <span class="tl" id="SPY-tl"><span class="tl-dot yellow"></span><span class="tl-text yellow">OOTEL</span></span>
+        </div>
+        <div class="ma-row"><span class="k">Sulgemishind</span><span id="SPY-lastClose">—</span></div>
+        <div class="ma-row"><span class="k">10p SMA</span><span id="SPY-sma10">—</span></div>
+        <div class="ma-row"><span class="k">20p SMA</span><span id="SPY-sma20">—</span></div>
+        <div class="ma-row"><span class="k">50p SMA</span><span id="SPY-sma50">—</span></div>
+        <div class="ma-row"><span class="k">Vahe</span><span id="SPY-smaGap">—</span></div>
+        <div class="chart-wrap" id="SPY-chartWrap"></div>
+        <div style="font-size:11px;color:var(--bear);margin-top:6px;" id="SPY-error"></div>
       </div>
       <div class="index-card" data-symbol="IWM">
         <div class="index-card-head">
@@ -831,7 +831,7 @@
     "COIN","MSTR","RDDT","SHOP","UBER","ABNB","DIS","NKE","SBUX","CMG"];
 
   // ---------- Sentiment ----------
-  const SENTIMENT_INDICES = ['SPY','QQQ','IWM'];
+  const SENTIMENT_INDICES = ['QQQ','SPY','IWM'];
 
   function sma(closes, period){
     const slice = closes.slice(-period);
@@ -889,7 +889,7 @@
 
   async function loadOneIndex(symbol, provider, key){
     setIndexTL(symbol, 'idle', 'LAEN…');
-    const bars = provider === 'polygon' ? await polygonDaily(symbol, key, 220) : await alphaDaily(symbol, key);
+    const bars = provider === 'polygon' ? await polygonDaily(symbol, key, 400) : await alphaDaily(symbol, key);
     if(bars.length < 21) throw new Error(symbol + ': liiga vähe andmepunkte 20p SMA jaoks.');
 
     const closes = bars.map(b=>b.c);
@@ -903,7 +903,7 @@
     $(symbol+'-sma20').textContent = s20.toFixed(2);
     $(symbol+'-sma50').textContent = s50!==null ? s50.toFixed(2) : 'N/A (liiga vähe ajalugu)';
     $(symbol+'-smaGap').textContent = (gap>=0?'+':'') + gap.toFixed(2) + '%';
-    renderChart(bars.slice(-100), symbol+'-chartWrap');
+    renderChart(bars.slice(-252), symbol+'-chartWrap'); // ~12 kuud (252 kauplemispäeva)
 
     let kind;
     if(Math.abs(gap) < 0.15){ kind = 'neutral'; setIndexTL(symbol,'neutral','NEUTRAALNE'); }
