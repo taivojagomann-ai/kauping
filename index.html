@@ -720,7 +720,16 @@
     const url = `https://www.alphavantage.co/query?function=TOP_GAINERS_LOSERS&apikey=${key}`;
     const data = await fetchJSON(url);
     if(!data.top_gainers) throw new Error(data['Note'] || data['Information'] || 'Alpha Vantage top gainers puudub — kontrolli võtit.');
-    return data.top_gainers.map(g=>({sym:g.ticker, changePct:parseFloat(g.change_percentage)}));
+    return data.top_gainers
+      .map(g=>({
+        sym: g.ticker,
+        changePct: parseFloat(g.change_percentage),
+        price: parseFloat(g.price),
+        volume: parseFloat(g.volume)
+      }))
+      // Sama likviidsuse filter, mis Polygon'il — vältimaks penny/mikro-cap aktsiaid, mis
+      // liiguvad suurel %-l, aga tühise mahuga (nt VEEE-tüüpi aktsiad).
+      .filter(g => g.price >= 1 && (g.price * g.volume) >= 500000);
   }
 
   async function finnhubQuote(symbol, key){
