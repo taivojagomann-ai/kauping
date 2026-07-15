@@ -303,7 +303,7 @@
         <input type="number" id="candidateCount" value="10" min="5" max="20" />
       </div>
       <button class="btn btn-ghost" id="scanBtn" disabled>Skanni turgu</button>
-      <div style="font-size:11px;color:var(--muted)">Tasuta API tasemed on kiiruspiiratud — skann võtab kandidaadi kohta ~10-15 sek.</div>
+      <div style="font-size:11px;color:var(--muted)">Tasuta API tasemed on kiiruspiiratud — skann võtab kandidaadi kohta ~20-30 sek (Polygon'iga lisandub sektori info päring).</div>
     </div>
 
     <div style="display:flex;gap:18px;flex-wrap:wrap;font-size:11px;color:var(--muted);background:var(--panel-2);border:1px solid var(--line);border-radius:4px;padding:8px 12px;margin-bottom:14px;">
@@ -331,6 +331,7 @@
         <tr>
           <th>Foor</th>
           <th>Ticker</th>
+          <th>Sektor</th>
           <th>Hind</th>
           <th>1-kuu %</th>
           <th>3-kuu %</th>
@@ -376,7 +377,7 @@
     <div class="block-head">
       <div>
         <div class="eyebrow">Plokk 03 · Exit Strategy</div>
-        <h2>Väljumisplaan — osaline müük + trailing MA</h2>
+        <h2> Väljumisplaan — osaline müük + trailing MA</h2>
       </div>
     </div>
 
@@ -686,6 +687,20 @@
     }
     scored.sort((a,b)=>b.composite-a.composite);
     return scored.slice(0, count);
+  }
+
+  async function polygonTickerDetails(symbol, key){
+    await respectRateLimit('polygon');
+    try{
+      const url = `https://api.polygon.io/v3/reference/tickers/${symbol}?apiKey=${key}`;
+      const data = await fetchJSON(url);
+      if(data.results && data.results.sic_description){
+        return data.results.sic_description;
+      }
+      return null;
+    }catch(e){
+      return null; // sektori info on lisainfo, mitte kriitiline — ei tohi katkestada kogu analüüsi
+    }
   }
 
   async function alphaDaily(symbol, key, full){
@@ -1048,7 +1063,7 @@
     $('resultsEmpty').style.display='none';
 
     rows.sort((a,b)=>b.a.score-a.a.score);
-    rows.forEach(({sym,a})=>{
+    rows.forEach(({sym,a,sector})=>{
       const tr = document.createElement('tr');
       const tl = trafficLight(a.score);
       const fmtPct = v => v===null ? 'N/A' : ((v>=0?'+':'')+v.toFixed(1)+'%');
@@ -1056,6 +1071,7 @@
       tr.innerHTML = `
         <td><span class="tl"><span class="tl-dot ${tl.cls}"></span><span class="tl-text ${tl.cls}">${tl.text}</span></span></td>
         <td class="tk" data-sym="${sym}" style="cursor:pointer;text-decoration:underline dotted;" title="Klõpsa graafiku vaatamiseks">${sym}</td>
+        <td style="font-size:11px;color:var(--muted);max-width:140px;">${sector || 'N/A'}</td>
         <td>$${a.price.toFixed(2)}</td>
         <td class="${pctClass(a.pctMove1M)}">${fmtPct(a.pctMove1M)}</td>
         <td class="${pctClass(a.pctMove3M)}">${fmtPct(a.pctMove3M)}</td>
@@ -1131,7 +1147,14 @@
           // ~220 kalendripäeva tagab piisavalt andmeid ka 6-kuu (~126 kauplemispäeva) arvutuseks
           const bars = provider==='polygon' ? await polygonDaily(sym, key, 220) : await alphaDaily(sym, key, false);
           const a = analyze(bars);
-          if(a) results.push({sym, a});
+          if(a){
+            let sector = null;
+            if(provider === 'polygon'){
+              setProgress(`Tõmban ${sym} sektori infot… (${i+1}/${symbols.length})`, ((i)/symbols.length)*100);
+              sector = await polygonTickerDetails(sym, key);
+            }
+            results.push({sym, a, sector});
+          }
           else skipped.push(sym + ': liiga vähe ajaloolisi andmepunkte (<25 päeva)');
         }catch(e){ skipped.push(sym + ': ' + e.message); }
       }
