@@ -689,13 +689,39 @@
     return scored.slice(0, count);
   }
 
+  // Kaardistab Polygon'i detailse SIC-kirjelduse (nt "SEMICONDUCTORS & RELATED DEVICES")
+  // samade 11 sektori nimetuse peale, mida "Sektori tugevus" (Plokk 01) juba kasutab —
+  // nii on Plokk 02 sektori veerg kooskõlas, mitte oma eraldi detailsem taksonoomia.
+  const SECTOR_KEYWORDS = [
+    { name:'Tehnoloogia', keys:['SEMICONDUCTOR','COMPUTER','SOFTWARE','ELECTRONIC','INTERNET','DATA PROCESSING','INFORMATION TECHNOLOGY','TECHNOLOGY'] },
+    { name:'Finants', keys:['BANK','INSURANCE','FINANCE','FINANCIAL','SECURIT','INVESTMENT','CREDIT','MORTGAGE'] },
+    { name:'Energia', keys:['PETROLEUM','OIL','GAS','ENERGY','DRILLING','REFIN'] },
+    { name:'Tervishoid', keys:['PHARMACEUTICAL','DRUG','MEDICAL','HEALTH','BIOLOGICAL','HOSPITAL','BIOTECH'] },
+    { name:'Tööstus', keys:['MACHINERY','INDUSTRIAL','AEROSPACE','DEFENSE','AIRLINE','TRUCKING','TRANSPORTATION','CONSTRUCTION','ENGINEERING'] },
+    { name:'Tarbija (tsükliline)', keys:['RETAIL','APPAREL','AUTOMOTIVE','AUTO','RESTAURANT','HOTEL','LEISURE','FOOTWEAR','HOUSEHOLD FURNITURE'] },
+    { name:'Tarbija (baas)', keys:['FOOD','BEVERAGE','GROCERY','TOBACCO','SOAP','COSMETIC'] },
+    { name:'Kommunaalteenused', keys:['ELECTRIC SERVICES','UTILITY','WATER SUPPLY','GAS & OTHER SERVICES COMBINED'] },
+    { name:'Materjalid', keys:['MINING','CHEMICAL','STEEL','METAL','PAPER','FOREST PRODUCTS','GOLD'] },
+    { name:'Kommunikatsioon', keys:['TELEPHONE','BROADCASTING','TELEVISION','RADIO','PUBLISHING','MEDIA','COMMUNICATIONS SERVICES'] },
+    { name:'Kinnisvara', keys:['REAL ESTATE','REIT'] }
+  ];
+
+  function classifySector(sicDescription){
+    if(!sicDescription) return null;
+    const upper = sicDescription.toUpperCase();
+    for(const bucket of SECTOR_KEYWORDS){
+      if(bucket.keys.some(k => upper.includes(k))) return bucket.name;
+    }
+    return 'Muu / Teadmata';
+  }
+
   async function polygonTickerDetails(symbol, key){
     await respectRateLimit('polygon');
     try{
       const url = `https://api.polygon.io/v3/reference/tickers/${symbol}?apiKey=${key}`;
       const data = await fetchJSON(url);
       if(data.results && data.results.sic_description){
-        return data.results.sic_description;
+        return classifySector(data.results.sic_description);
       }
       return null;
     }catch(e){
@@ -1664,7 +1690,8 @@
         // Eeltäidetud 10p ja 20p libisevad keskmised, et need oleks kohe graafikul nähtaval
         studies: [
           { id: 'MASimple@tv-basicstudies', inputs: { length: 10 } },
-          { id: 'MASimple@tv-basicstudies', inputs: { length: 20 } }
+          { id: 'MASimple@tv-basicstudies', inputs: { length: 20 } },
+          { id: 'MASimple@tv-basicstudies', inputs: { length: 50 } }
         ]
       });
     }catch(e){
