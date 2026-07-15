@@ -304,6 +304,7 @@
             <th>Hind</th>
             <th>1-kuu %</th>
             <th>3-kuu %</th>
+            <th>ADR%</th>
             <th>Trend (10p vs 20p)</th>
           </tr>
         </thead>
@@ -1098,6 +1099,7 @@
         <td>$${r.price.toFixed(2)}</td>
         <td class="${pctCls(r.pct1M)}">${fmtPct(r.pct1M)}</td>
         <td class="${pctCls(r.pct3M)}">${fmtPct(r.pct3M)}</td>
+        <td class="${r.lowADR?'neg':''}">${r.adrPct.toFixed(1)}%${r.lowADR?' ⚠':''}</td>
         <td>${r.trendUp ? '🔼 tõusev' : '🔽 langev'}</td>
       `;
       tbody.appendChild(tr);
@@ -1127,6 +1129,8 @@
         if(bars.length < 21){ skipped.push(item.sym + ': liiga vähe andmepunkte'); }
         else{
           const closes = bars.map(b=>b.c);
+          const highs = bars.map(b=>b.h);
+          const lows = bars.map(b=>b.l);
           const n = closes.length;
           const s10 = sma(closes,10), s20 = sma(closes,20);
           const idx1 = Math.max(0, n-22);
@@ -1134,7 +1138,13 @@
           const idx3 = n-63;
           const pct3M = idx3>=0 ? ((closes[n-1]-closes[idx3])/closes[idx3])*100 : null;
           const trendUp = s10 > s20;
-          results.push({category:item.category, sym:item.sym, price:closes[n-1], pct1M, pct3M, trendUp});
+          // ADR% — sama valem, mis Ploki 02 skanneris (20-päeva keskmine kõrgeim-madalaim vahe / hind)
+          const adrPeriod = Math.min(20, n-1);
+          let adrSum = 0;
+          for(let k=n-adrPeriod;k<n;k++) adrSum += (highs[k]-lows[k]);
+          const adrPct = (adrSum/adrPeriod/closes[n-1])*100;
+          const lowADR = adrPct < 3.5;
+          results.push({category:item.category, sym:item.sym, price:closes[n-1], pct1M, pct3M, trendUp, adrPct, lowADR});
         }
       }catch(e){ skipped.push(item.sym + ': ' + e.message); }
     }
