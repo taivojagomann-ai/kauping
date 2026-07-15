@@ -211,13 +211,13 @@
     <div class="block-head">
       <div>
         <div class="eyebrow">Plokk 01</div>
-        <h2>Turu sentiment — 10 vs 20 päeva</h2>
+        <h2>Turu sentiment — Market Regime (SPY + QQQ)</h2>
       </div>
     </div>
 
     <div class="verdict idle" id="consolidatedBox" style="margin-bottom:16px;padding:14px;">
       <div class="label" id="consolidatedLabel" style="font-size:16px;">OOTEL</div>
-      <div class="sub" id="consolidatedSub">Käivita, et näha konsolideeritud hinnangut kõigi kolme indeksi peale</div>
+      <div class="sub" id="consolidatedSub">Käivita, et näha Market Regime hinnangut (SPY + QQQ), IWM kuvatakse lisainfona</div>
     </div>
 
     <div class="index-grid" id="indexGrid">
@@ -229,6 +229,7 @@
         <div class="ma-row"><span class="k">Sulgemishind</span><span id="SPY-lastClose">—</span></div>
         <div class="ma-row"><span class="k">10p SMA</span><span id="SPY-sma10">—</span></div>
         <div class="ma-row"><span class="k">20p SMA</span><span id="SPY-sma20">—</span></div>
+        <div class="ma-row"><span class="k">50p SMA</span><span id="SPY-sma50">—</span></div>
         <div class="ma-row"><span class="k">Vahe</span><span id="SPY-smaGap">—</span></div>
         <div class="chart-wrap" id="SPY-chartWrap"></div>
         <div style="font-size:11px;color:var(--bear);margin-top:6px;" id="SPY-error"></div>
@@ -241,6 +242,7 @@
         <div class="ma-row"><span class="k">Sulgemishind</span><span id="QQQ-lastClose">—</span></div>
         <div class="ma-row"><span class="k">10p SMA</span><span id="QQQ-sma10">—</span></div>
         <div class="ma-row"><span class="k">20p SMA</span><span id="QQQ-sma20">—</span></div>
+        <div class="ma-row"><span class="k">50p SMA</span><span id="QQQ-sma50">—</span></div>
         <div class="ma-row"><span class="k">Vahe</span><span id="QQQ-smaGap">—</span></div>
         <div class="chart-wrap" id="QQQ-chartWrap"></div>
         <div style="font-size:11px;color:var(--bear);margin-top:6px;" id="QQQ-error"></div>
@@ -253,6 +255,7 @@
         <div class="ma-row"><span class="k">Sulgemishind</span><span id="IWM-lastClose">—</span></div>
         <div class="ma-row"><span class="k">10p SMA</span><span id="IWM-sma10">—</span></div>
         <div class="ma-row"><span class="k">20p SMA</span><span id="IWM-sma20">—</span></div>
+        <div class="ma-row"><span class="k">50p SMA</span><span id="IWM-sma50">—</span></div>
         <div class="ma-row"><span class="k">Vahe</span><span id="IWM-smaGap">—</span></div>
         <div class="chart-wrap" id="IWM-chartWrap"></div>
         <div style="font-size:11px;color:var(--bear);margin-top:6px;" id="IWM-error"></div>
@@ -346,9 +349,12 @@
     </div>
 
     <div class="chart-panel" id="chartPanelWrap" style="display:none;margin-top:14px;border:1px solid var(--line);border-radius:6px;overflow:hidden;">
-      <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 14px;background:var(--panel-2);border-bottom:1px solid var(--line);">
+      <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 14px;background:var(--panel-2);border-bottom:1px solid var(--line);flex-wrap:wrap;gap:8px;">
         <span class="index-name" id="chartPanelSymbol">—</span>
-        <button class="btn btn-ghost" id="chartPanelClose" style="padding:4px 10px;font-size:11px;">Sulge</button>
+        <div style="display:flex;gap:8px;align-items:center;">
+          <a id="chartPanelYahooLink" href="#" target="_blank" rel="noopener" class="btn btn-ghost" style="padding:4px 10px;font-size:11px;text-decoration:none;">Yahoo Finance ↗</a>
+          <button class="btn btn-ghost" id="chartPanelClose" style="padding:4px 10px;font-size:11px;">Sulge</button>
+        </div>
       </div>
       <div id="tvChartContainer" style="height:420px;width:100%;"></div>
     </div>
@@ -731,13 +737,21 @@
     }
     const ma10 = bars.length>=10 ? maLine(10) : '';
     const ma20 = bars.length>=20 ? maLine(20) : '';
+    const ma50 = bars.length>=50 ? maLine(50) : '';
 
     $(targetId).innerHTML = `
       <svg viewBox="0 0 ${w} ${h}" style="width:100%;height:110px;">
         <path d="${path}" fill="none" stroke="#4B5563" stroke-width="1.5" />
+        ${ma50 ? `<path d="${ma50}" fill="none" stroke="#8B5CF6" stroke-width="1.5" />` : ''}
         ${ma20 ? `<path d="${ma20}" fill="none" stroke="#FF5C6C" stroke-width="1.5" />` : ''}
         ${ma10 ? `<path d="${ma10}" fill="none" stroke="#3ECF8E" stroke-width="1.5" />` : ''}
-      </svg>`;
+      </svg>
+      <div style="font-size:9.5px;color:var(--muted);margin-top:2px;display:flex;gap:8px;flex-wrap:wrap;">
+        <span style="color:#3ECF8E">— 10p</span>
+        <span style="color:#FF5C6C">— 20p</span>
+        <span style="color:#8B5CF6">— 50p</span>
+        <span style="color:#4B5563">— hind</span>
+      </div>`;
   }
 
   function setIndexTL(symbol, kind, label){
@@ -755,19 +769,21 @@
 
   async function loadOneIndex(symbol, provider, key){
     setIndexTL(symbol, 'idle', 'LAEN…');
-    const bars = provider === 'polygon' ? await polygonDaily(symbol, key, 90) : await alphaDaily(symbol, key);
+    const bars = provider === 'polygon' ? await polygonDaily(symbol, key, 220) : await alphaDaily(symbol, key);
     if(bars.length < 21) throw new Error(symbol + ': liiga vähe andmepunkte 20p SMA jaoks.');
 
     const closes = bars.map(b=>b.c);
     const s10 = sma(closes,10), s20 = sma(closes,20);
+    const s50 = closes.length>=50 ? sma(closes,50) : null;
     const last = closes[closes.length-1];
     const gap = ((s10-s20)/s20*100);
 
     $(symbol+'-lastClose').textContent = last.toFixed(2);
     $(symbol+'-sma10').textContent = s10.toFixed(2);
     $(symbol+'-sma20').textContent = s20.toFixed(2);
+    $(symbol+'-sma50').textContent = s50!==null ? s50.toFixed(2) : 'N/A (liiga vähe ajalugu)';
     $(symbol+'-smaGap').textContent = (gap>=0?'+':'') + gap.toFixed(2) + '%';
-    renderChart(bars.slice(-60), symbol+'-chartWrap');
+    renderChart(bars.slice(-100), symbol+'-chartWrap');
 
     let kind;
     if(Math.abs(gap) < 0.15){ kind = 'neutral'; setIndexTL(symbol,'neutral','NEUTRAALNE'); }
@@ -790,32 +806,38 @@
     setConsolidated('idle', 'LAEN…', 'Tõmban SPY, QQQ ja IWM andmeid…');
 
     const kinds = [];
+    const kindsBySymbol = {};
     for(let i=0;i<SENTIMENT_INDICES.length;i++){
       const symbol = SENTIMENT_INDICES[i];
       try{
         const kind = await loadOneIndex(symbol, provider, key);
         kinds.push(kind);
+        kindsBySymbol[symbol] = kind;
         $(symbol+'-error').textContent = '';
       }catch(e){
         setIndexTL(symbol, 'idle', 'VIGA');
         $(symbol+'-error').textContent = e.message;
         kinds.push(null);
+        kindsBySymbol[symbol] = null;
       }
     }
 
-    const bullCount = kinds.filter(k=>k==='bull').length;
-    const bearCount = kinds.filter(k=>k==='bear').length;
-    const neutralCount = kinds.filter(k=>k==='neutral').length;
     const errCount = kinds.filter(k=>k===null).length;
+    const spyKind = kindsBySymbol['SPY'];
+    const qqqKind = kindsBySymbol['QQQ'];
+    const iwmKind = kindsBySymbol['IWM'];
 
-    if(errCount === SENTIMENT_INDICES.length){
-      setConsolidated('idle', 'VIGA', 'Ühegi indeksi andmeid ei õnnestunud laadida — kontrolli API võtit / piirmäära.');
-    } else if(bullCount >= 2){
-      setConsolidated('bull', 'TÕUSEV (' + bullCount + '/3 indeksit)', 'Enamik indekseid näitab 10p SMA üle 20p SMA — Kullamägi filter lubab breakout/EP setup\'e otsida.');
-    } else if(bearCount >= 2){
-      setConsolidated('bear', 'LANGEV (' + bearCount + '/3 indeksit)', 'Enamik indekseid näitab 10p SMA alla 20p SMA — soovitatud olla ettevaatlik / vähendada positsioone.');
+    // Market Regime: kogukonna Kullamägi-implementatsioonide järgi põhineb see SPY + QQQ
+    // joondumisel (mõlemad peavad olema samas suunas) — IWM kuvatakse kaardil, aga ei mõjuta
+    // otsust, kuna see pole tema enda meetodi ametlik osa.
+    if(errCount === SENTIMENT_INDICES.length || spyKind===null || qqqKind===null){
+      setConsolidated('idle', 'VIGA', 'SPY ja/või QQQ andmeid ei õnnestunud laadida — Market Regime nõuab mõlemat.');
+    } else if(spyKind==='bull' && qqqKind==='bull'){
+      setConsolidated('bull', 'MARKET REGIME: BULLISH', 'SPY ja QQQ on mõlemad tõusvas režiimis (10p SMA > 20p SMA) — tingimused soodustavad breakout/EP setup\'e. (IWM: ' + (iwmKind||'—') + ', info jaoks)');
+    } else if(spyKind==='bear' && qqqKind==='bear'){
+      setConsolidated('bear', 'MARKET REGIME: BEARISH', 'SPY ja QQQ on mõlemad langevas režiimis (10p SMA < 20p SMA) — ole ettevaatlik, väldi uusi pikki positsioone. (IWM: ' + (iwmKind||'—') + ', info jaoks)');
     } else {
-      setConsolidated('neutral', 'SEGATUD / NEUTRAALNE', 'Indeksid ei anna ühest signaali (' + bullCount + ' tõusev, ' + bearCount + ' langev, ' + neutralCount + ' neutraalne) — turg pole selges suunas, ole valikuline.');
+      setConsolidated('neutral', 'MARKET REGIME: NEUTRAALNE', 'SPY ja QQQ lahknevad (SPY: ' + spyKind + ', QQQ: ' + qqqKind + ') — segased signaalid, ole valikuline uute setup\'ide osas. (IWM: ' + (iwmKind||'—') + ', info jaoks)');
     }
 
     scanBtn.disabled = false;
@@ -1573,6 +1595,7 @@
     if(!symbol) return;
     $('chartPanelWrap').style.display = 'block';
     $('chartPanelSymbol').textContent = symbol + ' — päevagraafik';
+    $('chartPanelYahooLink').href = 'https://finance.yahoo.com/quote/' + encodeURIComponent(symbol);
     $('tvChartContainer').innerHTML = '<div style="color:var(--muted);font-size:12px;padding:20px;">Laen graafikut…</div>';
 
     try{
@@ -1590,7 +1613,12 @@
         enable_publishing: false,
         hide_side_toolbar: false,
         allow_symbol_change: true,
-        container_id: 'tvChartContainer'
+        container_id: 'tvChartContainer',
+        // Eeltäidetud 10p ja 20p libisevad keskmised, et need oleks kohe graafikul nähtaval
+        studies: [
+          { id: 'MASimple@tv-basicstudies', inputs: { length: 10 } },
+          { id: 'MASimple@tv-basicstudies', inputs: { length: 20 } }
+        ]
       });
     }catch(e){
       $('tvChartContainer').innerHTML = '<div style="color:var(--bear);font-size:12px;padding:20px;">' + e.message + '</div>';
