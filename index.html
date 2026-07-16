@@ -309,6 +309,7 @@
             <th>Trend (10p vs 20p)</th>
             <th>Sisenemine</th>
             <th>Stop</th>
+            <th></th>
           </tr>
         </thead>
         <tbody id="aiStocksBody"></tbody>
@@ -373,6 +374,7 @@
           <th>Setup skoor</th>
           <th>Sisenemine</th>
           <th>Stop</th>
+          <th></th>
         </tr>
       </thead>
       <tbody id="resultsBody"></tbody>
@@ -1132,8 +1134,9 @@
         <td class="${r.lowADR?'neg':''}">${r.adrPct.toFixed(1)}%${r.lowADR?' ⚠':''}</td>
         <td class="${r.rs==null?'':(r.rs>=0?'pos':'neg')}">${r.rs==null ? 'N/A (vaata sektoreid)' : ((r.rs>=0?'+':'')+r.rs.toFixed(1)+'%')}</td>
         <td>${r.trendUp ? '🔼 tõusev' : '🔽 langev'}</td>
-        <td>$${r.entry.toFixed(2)}${r.breakout ? ' 🚀' : ''}</td>
-        <td>$${r.stop.toFixed(2)}</td>
+        <td>$${r.entry.toFixed(2)}${r.breakout ? ' 🚀' : ' <span style="color:var(--muted);font-size:10px;">(jälgi)</span>'}</td>
+        <td>$${r.stop.toFixed(2)}${r.breakout ? '' : ' <span style="color:var(--muted);font-size:10px;">(projitseeritud)</span>'}</td>
+        <td><button class="btn btn-ghost size-calc-btn" data-entry="${r.entry}" data-stop="${r.stop}" style="padding:3px 8px;font-size:10.5px;">📐 Kogus</button></td>
       `;
       tbody.appendChild(tr);
     });
@@ -1191,7 +1194,9 @@
           const priorHigh = Math.max(...highs.slice(Math.max(0,n-21), n-1));
           const breakout = last.c > priorHigh && volRatio > 1.3;
           const entry = breakout ? last.c : priorHigh;
-          const stop = Math.max(last.l, last.c - adr);
+          // Sama parandus, mis Ploki 02 analyze() funktsioonis — stop peab olema arvutatud
+          // entry taseme pealt, kui breakout pole veel käivitunud, mitte tänase (madalama) hinna pealt.
+          const stop = breakout ? Math.max(last.l, last.c - adr) : entry - adr;
 
           results.push({category:item.category, sym:item.sym, price:closes[n-1], pct1M, pct3M, trendUp, adrPct, lowADR, rs, entry, stop, breakout});
         }
@@ -1305,10 +1310,14 @@
     if(hasRedFlags) score = Math.min(score, 30); // punased lipud piiravad skoori — kaootiline/spekulatiivne muster ei tohi näidata rohelist
     score = Math.round(Math.min(100, score));
 
-    const dayLowStop = last.l;
-    const adrStop = last.c - adr;
-    const stop = Math.max(dayLowStop, adrStop); // tighter of the two, respecting ADR ceiling on risk
     const entry = breakout ? last.c : priorHigh;
+    // TÄHTIS PARANDUS: kui breakout POLE veel käivitunud, on "entry" tulevane jälgimistase (priorHigh),
+    // mitte tänane hind. Stop peab siis olema arvutatud SELLEST tasemest, mitte tänasest (praegu madalamast)
+    // hinnast — vastasel juhul tekib absurdselt lai "risk" kahe erineva ajahetke andmete kokkusegamisest.
+    // Kui breakout ON juba käivitunud, on entry = tänane hind, ja tänase päeva madalaim/ADR on korrektne alus.
+    const stop = breakout
+      ? Math.max(last.l, last.c - adr)   // entry = tänane hind → stop tänase päeva pealt
+      : entry - adr;                     // entry = tulevane tase → stop projitseeritud sellest tasemest
 
     return {
       price:last.c, pctMove1M, pctMove3M, pctMove6M, adrPct, lowADR, volRatio, narrowing, higherLows, breakout,
@@ -1357,8 +1366,9 @@
         <td>${a.narrowing?'kitseneb ':''}${a.higherLows?'/ kõrgemad madalp.':''}${(!a.narrowing && !a.higherLows)?'—':''}</td>
         <td style="font-size:10.5px;color:${a.hasRedFlags?'var(--bear)':'var(--muted)'};max-width:220px;">${a.hasRedFlags ? a.redFlags.map(f=>'⚠ '+f).join('<br>') : '—'}</td>
         <td><span class="score-bar"><i style="width:${a.score}%"></i></span>${a.score}</td>
-        <td>$${a.entry.toFixed(2)}</td>
-        <td>$${a.stop.toFixed(2)}</td>
+        <td>$${a.entry.toFixed(2)}${a.breakout ? ' 🚀' : ' <span style="color:var(--muted);font-size:10px;">(jälgi)</span>'}</td>
+        <td>$${a.stop.toFixed(2)}${a.breakout ? '' : ' <span style="color:var(--muted);font-size:10px;">(projitseeritud)</span>'}</td>
+        <td><button class="btn btn-ghost size-calc-btn" data-entry="${a.entry}" data-stop="${a.stop}" style="padding:3px 8px;font-size:10.5px;">📐 Kogus</button></td>
       `;
       tbody.appendChild(tr);
     });
@@ -1868,6 +1878,24 @@
   }
 
   $('psCalcBtn').addEventListener('click', calculatePositionSize);
+
+  // Kiirlingid Plokk 02 ja AI-aktsiate tabelitest otse Plokki 04 (positsiooni suurus) —
+  // täidab sisenemise/stopi automaatselt ja keriv Plokki 04, et konto suurus/riski% sisestada.
+  function quickFillPositionSizing(entry, stop){
+    $('psEntry').value = entry.toFixed(2);
+    $('psStop').value = stop.toFixed(2);
+    const block4 = $('psAccount').closest('section.block');
+    if(block4) block4.scrollIntoView({behavior:'smooth', block:'start'});
+    if(!$('psAccount').value) $('psAccount').focus();
+  }
+  $('resultsBody').addEventListener('click', (e)=>{
+    const btn = e.target.closest('.size-calc-btn');
+    if(btn) quickFillPositionSizing(parseFloat(btn.dataset.entry), parseFloat(btn.dataset.stop));
+  });
+  $('aiStocksBody').addEventListener('click', (e)=>{
+    const btn = e.target.closest('.size-calc-btn');
+    if(btn) quickFillPositionSizing(parseFloat(btn.dataset.entry), parseFloat(btn.dataset.stop));
+  });
 
   // ---------- Aktsia graafik (TradingView embed) ----------
   let tvScriptLoading = null;
