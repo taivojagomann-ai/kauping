@@ -87,7 +87,7 @@
   .sentiment-grid{display:grid;grid-template-columns:180px 1fr;gap:24px;align-items:center;}
   @media (max-width:640px){.sentiment-grid{grid-template-columns:1fr;}}
 
-  .index-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;}
+  .index-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:14px;}
   @media (max-width:800px){.index-grid{grid-template-columns:1fr;}}
   .index-card{background:var(--panel-2);border:1px solid var(--line);border-radius:6px;padding:14px;}
   .index-card-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;padding-bottom:8px;border-bottom:1px solid var(--line);}
@@ -201,22 +201,8 @@
         <input type="checkbox" id="rememberKey" style="width:auto;" /> Jäta mulle meelde
       </label>
     </div>
-    <div class="field">
-      <label>MA tüüp (kõikjal)</label>
-      <select id="maTypeSelect">
-        <option value="sma">SMA (lihtne)</option>
-        <option value="ema">EMA (Kullamägi 2023+ eelistus)</option>
-      </select>
-    </div>
     <button class="btn" id="loadBtn">Käivita</button>
     <button class="btn btn-ghost" id="clearKeyBtn" style="display:none;">Kustuta salvestatud võti</button>
-    <div class="field">
-      <label>MA tüüp (10/20/50p)</label>
-      <select id="maTypeSelect">
-        <option value="sma">SMA (originaal)</option>
-        <option value="ema">EMA (Kullamägi 2023+)</option>
-      </select>
-    </div>
     <div class="notice" id="providerNotice"></div>
   </div>
 
@@ -225,28 +211,28 @@
     <div class="block-head">
       <div>
         <div class="eyebrow">Plokk 01</div>
-        <h2>Turu sentiment — Market Regime (SPY + Nasdaq Composite)</h2>
+        <h2>Turu sentiment — Market Regime (SPY + QQQ + ONEQ)</h2>
       </div>
     </div>
 
     <div class="verdict idle" id="consolidatedBox" style="margin-bottom:16px;padding:14px;">
       <div class="label" id="consolidatedLabel" style="font-size:16px;">OOTEL</div>
-      <div class="sub" id="consolidatedSub">Käivita, et näha Market Regime hinnangut (SPY + Nasdaq Composite), IWM kuvatakse lisainfona</div>
+      <div class="sub" id="consolidatedSub">Käivita, et näha Market Regime hinnangut (SPY + QQQ + ONEQ), IWM kuvatakse lisainfona</div>
     </div>
 
     <div class="index-grid" id="indexGrid">
-      <div class="index-card" data-symbol="ONEQ">
+      <div class="index-card" data-symbol="QQQ">
         <div class="index-card-head">
-          <span class="index-name">ONEQ — Nasdaq Composite</span>
-          <span class="tl" id="ONEQ-tl"><span class="tl-dot yellow"></span><span class="tl-text yellow">OOTEL</span></span>
+          <span class="index-name">QQQ — Nasdaq 100</span>
+          <span class="tl" id="QQQ-tl"><span class="tl-dot yellow"></span><span class="tl-text yellow">OOTEL</span></span>
         </div>
-        <div class="ma-row"><span class="k">Sulgemishind</span><span id="ONEQ-lastClose">—</span></div>
-        <div class="ma-row"><span class="k">10p SMA</span><span id="ONEQ-sma10">—</span></div>
-        <div class="ma-row"><span class="k">20p SMA</span><span id="ONEQ-sma20">—</span></div>
-        <div class="ma-row"><span class="k">50p SMA</span><span id="ONEQ-sma50">—</span></div>
-        <div class="ma-row"><span class="k">Vahe</span><span id="ONEQ-smaGap">—</span></div>
-        <div class="chart-wrap" id="ONEQ-chartWrap"></div>
-        <div style="font-size:11px;color:var(--bear);margin-top:6px;" id="ONEQ-error"></div>
+        <div class="ma-row"><span class="k">Sulgemishind</span><span id="QQQ-lastClose">—</span></div>
+        <div class="ma-row"><span class="k">10p SMA</span><span id="QQQ-sma10">—</span></div>
+        <div class="ma-row"><span class="k">20p SMA</span><span id="QQQ-sma20">—</span></div>
+        <div class="ma-row"><span class="k">50p SMA</span><span id="QQQ-sma50">—</span></div>
+        <div class="ma-row"><span class="k">Vahe</span><span id="QQQ-smaGap">—</span></div>
+        <div class="chart-wrap" id="QQQ-chartWrap"></div>
+        <div style="font-size:11px;color:var(--bear);margin-top:6px;" id="QQQ-error"></div>
       </div>
       <div class="index-card" data-symbol="SPY">
         <div class="index-card-head">
@@ -260,6 +246,19 @@
         <div class="ma-row"><span class="k">Vahe</span><span id="SPY-smaGap">—</span></div>
         <div class="chart-wrap" id="SPY-chartWrap"></div>
         <div style="font-size:11px;color:var(--bear);margin-top:6px;" id="SPY-error"></div>
+      </div>
+      <div class="index-card" data-symbol="ONEQ">
+        <div class="index-card-head">
+          <span class="index-name">ONEQ — Nasdaq Composite</span>
+          <span class="tl" id="ONEQ-tl"><span class="tl-dot yellow"></span><span class="tl-text yellow">OOTEL</span></span>
+        </div>
+        <div class="ma-row"><span class="k">Sulgemishind</span><span id="ONEQ-lastClose">—</span></div>
+        <div class="ma-row"><span class="k">10p SMA</span><span id="ONEQ-sma10">—</span></div>
+        <div class="ma-row"><span class="k">20p SMA</span><span id="ONEQ-sma20">—</span></div>
+        <div class="ma-row"><span class="k">50p SMA</span><span id="ONEQ-sma50">—</span></div>
+        <div class="ma-row"><span class="k">Vahe</span><span id="ONEQ-smaGap">—</span></div>
+        <div class="chart-wrap" id="ONEQ-chartWrap"></div>
+        <div style="font-size:11px;color:var(--bear);margin-top:6px;" id="ONEQ-error"></div>
       </div>
       <div class="index-card" data-symbol="IWM">
         <div class="index-card-head">
@@ -321,9 +320,6 @@
             <th>ADR%</th>
             <th>RS (vs sektor)</th>
             <th>Trend (10p vs 20p)</th>
-            <th>Sisenemine</th>
-            <th>Stop</th>
-            <th></th>
           </tr>
         </thead>
         <tbody id="aiStocksBody"></tbody>
@@ -369,7 +365,6 @@
     </div>
 
     <div class="progress" id="scanProgress"></div>
-    <div id="breadthWarning" style="display:none;font-size:11.5px;color:var(--amber);background:var(--amber-dim);border-left:2px solid var(--amber);padding:8px 12px;margin-top:10px;border-radius:0 4px 4px 0;"></div>
 
     <table id="resultsTable" style="display:none;">
       <thead>
@@ -389,7 +384,6 @@
           <th>Setup skoor</th>
           <th>Sisenemine</th>
           <th>Stop</th>
-          <th></th>
         </tr>
       </thead>
       <tbody id="resultsBody"></tbody>
@@ -645,7 +639,6 @@
     else clearSavedKey();
   });
   clearKeyBtn.addEventListener('click', clearSavedKey);
-  $('maTypeSelect').addEventListener('change', (e)=>{ maType = e.target.value; });
   loadSavedKey();
 
   const PROVIDER_NOTES = {
@@ -659,7 +652,6 @@
     notice.classList.add('show');
   }
   providerSel.addEventListener('change', updateNotice);
-  $('maTypeSelect').addEventListener('change', (e)=>{ maTypePref = e.target.value; });
   updateNotice();
 
   // ---------- Rate limiting per provider ----------
@@ -837,29 +829,11 @@
     "COIN","MSTR","RDDT","SHOP","UBER","ABNB","DIS","NKE","SBUX","CMG"];
 
   // ---------- Sentiment ----------
-  const SENTIMENT_INDICES = ['ONEQ','SPY','IWM'];
+  const SENTIMENT_INDICES = ['QQQ','SPY','ONEQ','IWM'];
 
   function sma(closes, period){
     const slice = closes.slice(-period);
     return slice.reduce((a,b)=>a+b,0)/slice.length;
-  }
-
-  // Kullamägi vahetas 2023. aastal SMA -> EMA (10p EMA), ja eelistab isiklikult 21 EMA-d 20p SMA
-  // asemel. Anname kasutajale valiku, milist tüüpi libisevat keskmist kogu rakendus kasutab.
-  let maTypePref = 'sma'; // 'sma' | 'ema', juhitav globaalse valikuga config-ribal
-  function emaFull(closes, period){
-    if(closes.length < period) return null;
-    const k = 2/(period+1);
-    let emaVal = closes.slice(0,period).reduce((a,b)=>a+b,0)/period; // seeme = SMA esimesest `period` barist
-    for(let i=period;i<closes.length;i++){
-      emaVal = closes[i]*k + emaVal*(1-k);
-    }
-    return emaVal;
-  }
-  // Universaalne MA-funktsioon, mis kasutab valitud tüüpi (SMA või EMA) — kasuta seda uutes kohtades
-  // sma() otsese kutsumise asemel, et austada kasutaja valikut.
-  function ma(closes, period){
-    return maTypePref === 'ema' ? emaFull(closes, period) : sma(closes, period);
   }
 
   function renderChart(bars, targetId){
@@ -874,7 +848,7 @@
     function maLine(period){
       let pts=[];
       for(let i=period-1;i<bars.length;i++){
-        const val = ma(closes.slice(0,i+1), period);
+        const val = sma(closes.slice(0,i+1), period);
         pts.push([i,val]);
       }
       return pts.map((p,i)=> (i===0?'M':'L') + x(p[0]).toFixed(1) + ',' + y(p[1]).toFixed(1)).join(' ');
@@ -933,8 +907,8 @@
     if(bars.length < 21) throw new Error(symbol + ': liiga vähe andmepunkte 20p SMA jaoks.');
 
     const closes = bars.map(b=>b.c);
-    const s10 = ma(closes,10), s20 = ma(closes,20);
-    const s50 = closes.length>=50 ? ma(closes,50) : null;
+    const s10 = sma(closes,10), s20 = sma(closes,20);
+    const s50 = closes.length>=50 ? sma(closes,50) : null;
     const last = closes[closes.length-1];
     const gap = ((s10-s20)/s20*100);
 
@@ -963,7 +937,7 @@
       return;
     }
 
-    setConsolidated('idle', 'LAEN…', 'Tõmban SPY, ONEQ (Nasdaq Composite) ja IWM andmeid…');
+    setConsolidated('idle', 'LAEN…', 'Tõmban SPY, QQQ, ONEQ ja IWM andmeid…');
 
     const kinds = [];
     const kindsBySymbol = {};
@@ -984,20 +958,39 @@
 
     const errCount = kinds.filter(k=>k===null).length;
     const spyKind = kindsBySymbol['SPY'];
-    const qqqKind = kindsBySymbol['ONEQ'];
+    const qqqKind = kindsBySymbol['QQQ'];
+    const oneqKind = kindsBySymbol['ONEQ'];
     const iwmKind = kindsBySymbol['IWM'];
 
-    // Market Regime: kogukonna Kullamägi-implementatsioonide järgi põhineb see SPY + QQQ
-    // joondumisel (mõlemad peavad olema samas suunas) — IWM kuvatakse kaardil, aga ei mõjuta
-    // otsust, kuna see pole tema enda meetodi ametlik osa.
-    if(errCount === SENTIMENT_INDICES.length || spyKind===null || qqqKind===null){
-      setConsolidated('idle', 'VIGA', 'SPY ja/või QQQ andmeid ei õnnestunud laadida — Market Regime nõuab mõlemat.');
-    } else if(spyKind==='bull' && qqqKind==='bull'){
-      setConsolidated('bull', 'MARKET REGIME: BULLISH', 'SPY ja Nasdaq Composite on mõlemad tõusvas režiimis (10p SMA > 20p SMA) — tingimused soodustavad breakout/EP setup\'e. (IWM: ' + (iwmKind||'—') + ', info jaoks)');
-    } else if(spyKind==='bear' && qqqKind==='bear'){
-      setConsolidated('bear', 'MARKET REGIME: BEARISH', 'SPY ja Nasdaq Composite on mõlemad langevas režiimis (10p SMA < 20p SMA) — ole ettevaatlik, väldi uusi pikki positsioone. (IWM: ' + (iwmKind||'—') + ', info jaoks)');
+    // Market Regime: arvestab kolme turgu — SPY, QQQ ja ONEQ (Nasdaq Composite).
+    // Kui kõik kolm on samas suunas, on hinnang kindel; kui 2/3 lahknevad, antakse
+    // "ülekaalus" hinnang enamuse suuna järgi; kui puhas 1-1-1 lahknemine, on tulemus
+    // neutraalne. IWM kuvatakse kaardil ainult lisainfona ega mõjuta otsust.
+    const coreKinds = [spyKind, qqqKind, oneqKind];
+    const coreErrCount = coreKinds.filter(k=>k===null).length;
+
+    if(coreErrCount > 0){
+      const missing = [];
+      if(spyKind===null) missing.push('SPY');
+      if(qqqKind===null) missing.push('QQQ');
+      if(oneqKind===null) missing.push('ONEQ');
+      setConsolidated('idle', 'VIGA', missing.join(', ') + ' andmeid ei õnnestunud laadida — Market Regime nõuab kõiki kolme (SPY, QQQ, ONEQ).');
     } else {
-      setConsolidated('neutral', 'MARKET REGIME: NEUTRAALNE', 'SPY ja Nasdaq Composite lahknevad (SPY: ' + spyKind + ', Nasdaq: ' + qqqKind + ') — segased signaalid, ole valikuline uute setup\'ide osas. (IWM: ' + (iwmKind||'—') + ', info jaoks)');
+      const bullCount = coreKinds.filter(k=>k==='bull').length;
+      const bearCount = coreKinds.filter(k=>k==='bear').length;
+      const detail = 'SPY: ' + spyKind + ', QQQ: ' + qqqKind + ', ONEQ: ' + oneqKind + '. (IWM: ' + (iwmKind||'—') + ', info jaoks)';
+
+      if(bullCount === 3){
+        setConsolidated('bull', 'MARKET REGIME: BULLISH', 'SPY, QQQ ja ONEQ on kõik tõusvas režiimis (10p SMA > 20p SMA) — tingimused soodustavad breakout/EP setup\'e. ' + detail);
+      } else if(bearCount === 3){
+        setConsolidated('bear', 'MARKET REGIME: BEARISH', 'SPY, QQQ ja ONEQ on kõik langevas režiimis (10p SMA < 20p SMA) — ole ettevaatlik, väldi uusi pikki positsioone. ' + detail);
+      } else if(bullCount === 2){
+        setConsolidated('bull', 'MARKET REGIME: BULLISH (ülekaalus)', '2 kolmest turust (SPY/QQQ/ONEQ) on tõusvas režiimis — kallutatud positiivsele poolele, aga mitte üksmeelne. ' + detail);
+      } else if(bearCount === 2){
+        setConsolidated('bear', 'MARKET REGIME: BEARISH (ülekaalus)', '2 kolmest turust (SPY/QQQ/ONEQ) on langevas režiimis — kallutatud negatiivsele poolele, aga mitte üksmeelne. ' + detail);
+      } else {
+        setConsolidated('neutral', 'MARKET REGIME: NEUTRAALNE', 'SPY, QQQ ja ONEQ lahknevad selgelt — segased signaalid, ole valikuline uute setup\'ide osas. ' + detail);
+      }
     }
 
     scanBtn.disabled = false;
@@ -1006,8 +999,6 @@
   // ---------- Sector strength (separate button, own rate-limited loop) ----------
   // Globaalne salvestus sektori 1-kuu tootluste jaoks — täidetakse "Sektori tugevus" skannist
   // ja kasutatakse RS (suhtelise tugevuse) arvutuseks nii AI-aktsiate kui Ploki 02 tabelis.
-  // MA tüübi valik — Kullamägi vahetas 2023 SMA->EMA; lisame valiku, vaikimisi SMA (originaal).
-  let maType = 'sma';
   let sectorReturns1M = {};
   function computeRS(stockPct1M, sectorName){
     if(stockPct1M === null || stockPct1M === undefined) return null;
@@ -1090,7 +1081,7 @@
         else{
           const closes = bars.map(b=>b.c);
           const n = closes.length;
-          const s10 = ma(closes,10), s20 = ma(closes,20);
+          const s10 = sma(closes,10), s20 = sma(closes,20);
           const idx1 = Math.max(0, n-22);
           const pct1M = ((closes[n-1]-closes[idx1])/closes[idx1])*100;
           const idx3 = n-63;
@@ -1171,9 +1162,6 @@
         <td class="${r.lowADR?'neg':''}">${r.adrPct.toFixed(1)}%${r.lowADR?' ⚠':''}</td>
         <td class="${r.rs==null?'':(r.rs>=0?'pos':'neg')}">${r.rs==null ? 'N/A (vaata sektoreid)' : ((r.rs>=0?'+':'')+r.rs.toFixed(1)+'%')}</td>
         <td>${r.trendUp ? '🔼 tõusev' : '🔽 langev'}</td>
-        <td>$${r.entry.toFixed(2)}${r.breakout ? ' 🚀' : ' <span style="color:var(--muted);font-size:10px;">(jälgi)</span>'}</td>
-        <td>$${r.stop.toFixed(2)}${r.breakout ? '' : ' <span style="color:var(--muted);font-size:10px;">(projitseeritud)</span>'}</td>
-        <td><button class="btn btn-ghost size-calc-btn" data-entry="${r.entry}" data-stop="${r.stop}" style="padding:3px 8px;font-size:10.5px;">📐 Kogus</button></td>
       `;
       tbody.appendChild(tr);
     });
@@ -1204,10 +1192,8 @@
           const closes = bars.map(b=>b.c);
           const highs = bars.map(b=>b.h);
           const lows = bars.map(b=>b.l);
-          const vols = bars.map(b=>b.v);
           const n = closes.length;
-          const last = bars[n-1];
-          const s10 = ma(closes,10), s20 = ma(closes,20);
+          const s10 = sma(closes,10), s20 = sma(closes,20);
           const idx1 = Math.max(0, n-22);
           const pct1M = ((closes[n-1]-closes[idx1])/closes[idx1])*100;
           const idx3 = n-63;
@@ -1217,25 +1203,10 @@
           const adrPeriod = Math.min(20, n-1);
           let adrSum = 0;
           for(let k=n-adrPeriod;k<n;k++) adrSum += (highs[k]-lows[k]);
-          const adr = adrSum/adrPeriod;
-          const adrPct = (adr/closes[n-1])*100;
+          const adrPct = (adrSum/adrPeriod/closes[n-1])*100;
           const lowADR = adrPct < 3.5;
           const rs = computeRS(pct1M, AI_TICKER_SECTOR[item.sym]);
-
-          // Sisenemine / Stop — täpselt sama loogika, mis Ploki 02 analyze() funktsioonis.
-          const volPeriod = Math.min(20, n-1);
-          let volSum = 0;
-          for(let k=n-volPeriod;k<n;k++) volSum += vols[k];
-          const volAvg = volSum/volPeriod;
-          const volRatio = volAvg>0 ? (last.v/volAvg) : 0;
-          const priorHigh = Math.max(...highs.slice(Math.max(0,n-21), n-1));
-          const breakout = last.c > priorHigh && volRatio > 1.3;
-          const entry = breakout ? last.c : priorHigh;
-          // Sama parandus, mis Ploki 02 analyze() funktsioonis — stop peab olema arvutatud
-          // entry taseme pealt, kui breakout pole veel käivitunud, mitte tänase (madalama) hinna pealt.
-          const stop = breakout ? Math.max(last.l, last.c - adr) : entry - adr;
-
-          results.push({category:item.category, sym:item.sym, price:closes[n-1], pct1M, pct3M, trendUp, adrPct, lowADR, rs, entry, stop, breakout});
+          results.push({category:item.category, sym:item.sym, price:closes[n-1], pct1M, pct3M, trendUp, adrPct, lowADR, rs});
         }
       }catch(e){ skipped.push(item.sym + ': ' + e.message); }
     }
@@ -1252,18 +1223,8 @@
   });
 
   // ---------- Scanner analysis ----------
-  function ema(closes, period){
-    const k = 2/(period+1);
-    let emaVal = closes.slice(0,period).reduce((a,b)=>a+b,0)/period;
-    for(let i=period;i<closes.length;i++){ emaVal = closes[i]*k + emaVal*(1-k); }
-    return emaVal;
-  }
-  function maCalc(closes, period){
-    return maType === 'ema' ? ema(closes, period) : sma(closes, period);
-  }
-
   function analyze(bars){
-    if(bars.length < 60) return null; // vajab piisavalt ajalugu ka 50p MA jaoks
+    if(bars.length < 45) return null; // vajab piisavalt ajalugu laiema (kuni 2 kuu) konsolideerumisakna jaoks
     const closes = bars.map(b=>b.c), highs = bars.map(b=>b.h), lows = bars.map(b=>b.l), vols = bars.map(b=>b.v);
     const n = bars.length;
     const last = bars[n-1];
@@ -1283,15 +1244,6 @@
     const adr = adrSum/adrPeriod;
     const adrPct = (adr/last.c)*100;
     const lowADR = adrPct < 3.5; // täpsem allikas: Kullamägi filtreerib ADR üle 5%, kasutame veidi leebemat 3.5% läve
-
-    // "I rarely buy stocks below the 50-day moving average" — kõva reegel, mida varem ei kontrollitud.
-    const ma50 = maCalc(closes, 50);
-    const belowMA50 = last.c < ma50;
-
-    // "I usually don't buy if the stock is up more on the day than its ATR" — ülevenitatuse kontroll.
-    const todayMove = last.c - last.o;
-    const todayMovePct = (todayMove/last.o)*100;
-    const extendedToday = adrPct > 0 && Math.abs(todayMovePct) > adrPct;
 
     const volPeriod = Math.min(20, n-1);
     let volSum=0;
@@ -1351,14 +1303,6 @@
     const extremeRange = rangeRatio > 15;
     if(extremeRange) redFlags.push('Ajaloolises aknas on kõrgeim hind ' + rangeRatio.toFixed(1) + 'x madalaimast — ekstreemne vahemik, tüüpiline metsiku tõusu-languse (mitte "stairstep") mustri puhul.');
 
-    // 4. Hind on alla 50p keskmise — Kullamägi enda otsene reegel: "I rarely buy stocks below
-    // the 50-day moving average." Tugevaimad momentum-aktsiad on tavaliselt selle kohal.
-    if(belowMA50) redFlags.push('Hind ($' + last.c.toFixed(2) + ') on alla 50p keskmise ($' + ma50.toFixed(2) + ') — Kullamägi väldib selliseid aktsiaid enda sõnul peaaegu alati.');
-
-    // 5. Tänane liikumine juba ületab ADR-i — märk, et jälitad juba liiga kaugele läinud
-    // liikumist, mitte ei sisene mõistliku "kolmandiku-poole-kahe kolmandiku ADR-i" juures.
-    if(overExtended) redFlags.push('Tänane liikumine (' + todaysMovePct.toFixed(1) + '%) ületab juba päeva ADR-i (' + adrPct.toFixed(1) + '%) — Kullamägi väldib sisenemist, kui aktsia on juba nii palju liikunud.');
-
     // Punased lipud piiravad skoori sarnaselt madala ADR-iga — struktuur ei tohi näida
     // heana, kui alusandmed viitavad kaootilisele/spekulatiivsele käitumisele.
     const hasRedFlags = redFlags.length > 0;
@@ -1372,22 +1316,16 @@
     score += breakout ? 20 : 0;
     if(lowADR) score = Math.min(score, 25); // madal ADR piirab skoori, isegi kui muu struktuur näeb hea välja
     if(hasRedFlags) score = Math.min(score, 30); // punased lipud piiravad skoori — kaootiline/spekulatiivne muster ei tohi näidata rohelist
-    if(belowMA50) score = Math.min(score, 20); // "I rarely buy stocks below the 50-day moving average" — kõva piirang
-    if(extendedToday) score = Math.min(score, 40); // ülevenitatud päev — kõrgem risk jälitada juba liiga kaugele läinud liikumist
     score = Math.round(Math.min(100, score));
 
+    const dayLowStop = last.l;
+    const adrStop = last.c - adr;
+    const stop = Math.max(dayLowStop, adrStop); // tighter of the two, respecting ADR ceiling on risk
     const entry = breakout ? last.c : priorHigh;
-    // TÄHTIS PARANDUS: kui breakout POLE veel käivitunud, on "entry" tulevane jälgimistase (priorHigh),
-    // mitte tänane hind. Stop peab siis olema arvutatud SELLEST tasemest, mitte tänasest (praegu madalamast)
-    // hinnast — vastasel juhul tekib absurdselt lai "risk" kahe erineva ajahetke andmete kokkusegamisest.
-    // Kui breakout ON juba käivitunud, on entry = tänane hind, ja tänase päeva madalaim/ADR on korrektne alus.
-    const stop = breakout
-      ? Math.max(last.l, last.c - adr)   // entry = tänane hind → stop tänase päeva pealt
-      : entry - adr;                     // entry = tulevane tase → stop projitseeritud sellest tasemest
 
     return {
       price:last.c, pctMove1M, pctMove3M, pctMove6M, adrPct, lowADR, volRatio, narrowing, higherLows, breakout,
-      redFlags, hasRedFlags, ma50, belowMA50, todayMovePct, extendedToday,
+      redFlags, hasRedFlags,
       score, entry, stop
     };
   }
@@ -1430,17 +1368,10 @@
         <td>${a.volRatio.toFixed(2)}x</td>
         <td class="${a.lowADR?'neg':''}">${a.adrPct.toFixed(1)}%${a.lowADR?' ⚠':''}</td>
         <td>${a.narrowing?'kitseneb ':''}${a.higherLows?'/ kõrgemad madalp.':''}${(!a.narrowing && !a.higherLows)?'—':''}</td>
-        <td style="font-size:10.5px;color:${(a.hasRedFlags||a.belowMA50||a.extendedToday)?'var(--bear)':'var(--muted)'};max-width:240px;">${
-          [
-            ...(a.redFlags||[]),
-            a.belowMA50 ? 'Hind alla 50p MA — Kullamägi väldib ostmist allpool 50p keskmist.' : null,
-            a.extendedToday ? 'Ülevenitatud täna (päevane liikumine ' + a.todayMovePct.toFixed(1) + '% > ADR ' + a.adrPct.toFixed(1) + '%) — liiga kaugele läinud sisenemiseks.' : null
-          ].filter(Boolean).map(f=>'⚠ '+f).join('<br>') || '—'
-        }</td>
+        <td style="font-size:10.5px;color:${a.hasRedFlags?'var(--bear)':'var(--muted)'};max-width:220px;">${a.hasRedFlags ? a.redFlags.map(f=>'⚠ '+f).join('<br>') : '—'}</td>
         <td><span class="score-bar"><i style="width:${a.score}%"></i></span>${a.score}</td>
-        <td>$${a.entry.toFixed(2)}${a.breakout ? ' 🚀' : ' <span style="color:var(--muted);font-size:10px;">(jälgi)</span>'}</td>
-        <td>$${a.stop.toFixed(2)}${a.breakout ? '' : ' <span style="color:var(--muted);font-size:10px;">(projitseeritud)</span>'}</td>
-        <td><button class="btn btn-ghost size-calc-btn" data-entry="${a.entry}" data-stop="${a.stop}" style="padding:3px 8px;font-size:10.5px;">📐 Kogus</button></td>
+        <td>$${a.entry.toFixed(2)}</td>
+        <td>$${a.stop.toFixed(2)}</td>
       `;
       tbody.appendChild(tr);
     });
@@ -1524,35 +1455,6 @@
       } else {
         setProgress('Valmis.' + (skipped.length ? (' (' + skipped.length + ' kandidaati jäeti vahele: ' + skipped.join(' | ') + ')') : ''), 100);
       }
-
-      // Sektori laiuse kontroll — Kullamägi enda sõnul: "it's never normally a good thing when
-      // you only have one sector that looks good for long setups... you'd like to see stocks
-      // from lots of different sectors." Kitsas, ühte sektorisse koondunud tulemus viitab
-      // nõrgale turu laiusele, isegi kui üksikud setup'id ise näevad head välja.
-      const breadthEl = $('breadthWarning');
-      if(results.length >= 3){
-        const sectorCounts = {};
-        results.forEach(r => {
-          const s = r.sector || 'Teadmata';
-          sectorCounts[s] = (sectorCounts[s]||0) + 1;
-        });
-        const entries = Object.entries(sectorCounts).sort((a,b)=>b[1]-a[1]);
-        const [topSector, topCount] = entries[0];
-        const share = topCount / results.length;
-        if(share > 0.5){
-          breadthEl.style.display = 'block';
-          breadthEl.textContent = '⚠ Kitsas turu laius: ' + topCount + '/' + results.length + ' kandidaati ("' + topSector + '") on samast sektorist — Kullamägi hoiatab, et see viitab nõrgale laiusele turul, mitte tervele, laiapõhjalisele momentumile.';
-        } else {
-          breadthEl.style.display = 'block';
-          breadthEl.style.color = 'var(--bull)';
-          breadthEl.style.background = 'var(--bull-dim)';
-          breadthEl.style.borderLeftColor = 'var(--bull)';
-          breadthEl.textContent = '✓ Hea turu laius: kandidaadid jaotuvad ' + entries.length + ' erineva sektori vahel (suurim: "' + topSector + '" ' + topCount + '/' + results.length + ') — see viitab laiapõhjalisemale momentumile.';
-        }
-      } else {
-        breadthEl.style.display = 'none';
-      }
-
       renderResults(results);
     }catch(e){
       setProgress('Viga: ' + e.message, 0);
@@ -1606,7 +1508,7 @@
     const lastDate = new Date(lastBar.t);
     const daysHeld = businessDaysBetween(entryDate, lastDate);
 
-    const maValue = ma(closes, maPeriod);
+    const maValue = sma(closes, maPeriod);
     const activeStop = partialSold ? Math.max(entry, initialStop) : initialStop;
 
     const closeBelowMA = currentPrice < maValue;
@@ -1979,29 +1881,6 @@
   }
 
   $('psCalcBtn').addEventListener('click', calculatePositionSize);
-
-  // Kiirlingid Plokk 02 ja AI-aktsiate tabelitest otse Plokki 04 (positsiooni suurus) —
-  // täidab sisenemise/stopi automaatselt ja keriv Plokki 04, et konto suurus/riski% sisestada.
-  function quickFillPositionSizing(entry, stop){
-    $('psEntry').value = entry.toFixed(2);
-    $('psStop').value = stop.toFixed(2);
-    const block4 = $('psAccount').closest('section.block');
-    if(block4) block4.scrollIntoView({behavior:'smooth', block:'start'});
-    if(!$('psAccount').value){
-      $('psAccount').focus();
-    } else {
-      // Konto suurus juba olemas — arvuta kogus kohe, ilma lisaklõpsuta.
-      calculatePositionSize();
-    }
-  }
-  $('resultsBody').addEventListener('click', (e)=>{
-    const btn = e.target.closest('.size-calc-btn');
-    if(btn) quickFillPositionSizing(parseFloat(btn.dataset.entry), parseFloat(btn.dataset.stop));
-  });
-  $('aiStocksBody').addEventListener('click', (e)=>{
-    const btn = e.target.closest('.size-calc-btn');
-    if(btn) quickFillPositionSizing(parseFloat(btn.dataset.entry), parseFloat(btn.dataset.stop));
-  });
 
   // ---------- Aktsia graafik (TradingView embed) ----------
   let tvScriptLoading = null;
