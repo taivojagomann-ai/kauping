@@ -486,6 +486,13 @@
           <div class="ma-row"><span class="k">Päevi tehingus</span><span id="posDays">—</span></div>
           <div class="ma-row"><span class="k">Trailing MA (<span id="posMALabelTxt">10p</span>)</span><span id="posMAValue">—</span></div>
           <div class="ma-row"><span class="k">Aktiivne stop tase</span><span id="posActiveStop">—</span></div>
+          <div class="ma-row" id="posSuggestedStopRow" style="display:none;">
+            <span class="k">Soovitatav uus stop <i style="color:var(--amber);font-style:normal;font-size:10px;">LISANDUS</i></span>
+            <span>
+              <span id="posSuggestedStop">—</span>
+              <button class="btn btn-ghost" id="posUseSuggestedStopBtn" style="padding:2px 8px;font-size:11px;margin-left:8px;">Kasuta seda</button>
+            </span>
+          </div>
         </div>
       </div>
       <div class="notice show" id="posAction" style="margin-top:14px;"></div>
@@ -1487,6 +1494,53 @@
     $('posVerdictSub').textContent = sub;
   }
 
+  // ADR (keskmine päevane vahemik) ja hiljutine madalpunkt — kasutame neid, et
+  // pakkuda saadud/salvestatud positsioonidele konkreetset uut stop-taset, mida
+  // kasutaja saab oma maakleri juures reaalselt tellimusena sisestada.
+  function computeADR(bars, period){
+    const n = bars.length;
+    const p = Math.min(period, n-1);
+    if(p <= 0) return 0;
+    let sum = 0;
+    for(let i=n-p;i<n;i++) sum += (bars[i].h - bars[i].l);
+    return sum/p;
+  }
+
+  function recentSwingLow(bars, lookback){
+    const n = bars.length;
+    const s = Math.max(0, n-lookback);
+    const lows = bars.slice(s, n).map(b=>b.l);
+    return Math.min(...lows);
+  }
+
+  function computeSuggestedStop(bars, currentPrice, entry, activeStop, maValue, partialSold, profitR){
+    // Stop liigub pika positsiooni puhul ainult ülespoole (kunagi ei lõdvenda) —
+    // pakume uut taset vaid siis, kui see on rangem (kõrgem) kui praegune aktiivne stop.
+    let candidate = null;
+    let reason = '';
+
+    if(partialSold){
+      // Trailing-faasis on trigger juba trailing MA — kui MA on kõrgemal kui breakeven,
+      // saab stopi sinna reaalselt üles tõsta.
+      if(maValue > activeStop){
+        candidate = maValue;
+        reason = 'Trailing MA on tõusnud breakeven\'ist kõrgemale — saad stopi sinna üles tõsta.';
+      }
+    } else if(profitR > 0){
+      const adr = computeADR(bars, 20);
+      const adrStop = currentPrice - adr;
+      const swingLowStop = recentSwingLow(bars, 10);
+      candidate = Math.max(swingLowStop, adrStop);
+      reason = 'Hind on liikunud kasumisse — hiljutise madalpunkti ja ADR-i põhjal saab stopi kõrgemale tõsta, et lukustada osa kasumist.';
+    }
+
+    if(candidate === null) return null;
+    candidate = Math.min(candidate, currentPrice - 0.01); // stop peab jääma praegusest hinnast allapoole
+    if(candidate <= activeStop + 0.001) return null; // uus tase pole rangem kui praegune — pole vaja muuta
+    return { price: candidate, reason };
+  }
+
+
   // Puhas arvutusfunktsioon (ei puuduta DOM-i) — kasutatakse nii ühekordse
   // analüüsi vormis kui salvestatud positsioonide akordionis, et vältida koodi dubleerimist.
   function computePositionAnalysis(bars, entry, dateStr, initialStop, maPeriod, partialSold){
@@ -1546,7 +1600,9 @@
       actionHtml = '<b>Tegevus:</b> hoia täies mahus, jälgi stopi taset ($' + activeStop.toFixed(2) + ') ja jälgi, millal jõuad 3-5 päeva või 2R kasumi lävendini.';
     }
 
-    return {currentPrice, R, profitR, profitPerShare, target2R, target3R, daysHeld, maValue, activeStop, kind, label, sub, actionHtml};
+    const suggestion = computeSuggestedStop(bars, currentPrice, entry, activeStop, maValue, partialSold, profitR);
+
+    return {currentPrice, R, profitR, profitPerShare, target2R, target3R, daysHeld, maValue, activeStop, kind, label, sub, actionHtml, suggestedStop: suggestion ? suggestion.price : null, suggestedStopReason: suggestion ? suggestion.reason : null};
   }
 
   async function runExitAnalysis(){
@@ -1589,6 +1645,14 @@
       $('posMAValue').textContent = '$' + r.maValue.toFixed(2);
       $('posActiveStop').textContent = '$' + r.activeStop.toFixed(2) + (partialSold ? ' (breakeven)' : ' (algne stop)');
 
+      if(r.suggestedStop !== null){
+        $('posSuggestedStopRow').style.display = 'flex';
+        $('posSuggestedStop').textContent = '$' + r.suggestedStop.toFixed(2);
+        $('posSuggestedStop').title = r.suggestedStopReason || '';
+      } else {
+        $('posSuggestedStopRow').style.display = 'none';
+      }
+
       setPosVerdict(r.kind, r.label, r.sub);
       $('posAction').innerHTML = r.actionHtml;
     }catch(e){
@@ -1598,6 +1662,14 @@
   }
 
   $('posBtn').addEventListener('click', runExitAnalysis);
+
+  $('posUseSuggestedStopBtn').addEventListener('click', ()=>{
+    const val = $('posSuggestedStop').textContent.replace('$','');
+    if(val && val !== '—'){
+      $('posStop').value = val;
+      runExitAnalysis();
+    }
+  });
 
   // ---------- Saved positions accordion (persisted in localStorage) ----------
   const POSITIONS_KEY = 'tape-and-base:positions';
@@ -1654,6 +1726,16 @@
           <div class="ma-row"><span class="k">Päevi tehingus</span><span>${a.daysHeld} tööpäeva</span></div>
           <div class="ma-row"><span class="k">Trailing MA (${p.maPeriod}p)</span><span>$${a.maValue.toFixed(2)}</span></div>
           <div class="ma-row"><span class="k">Aktiivne stop</span><span>$${a.activeStop.toFixed(2)}${p.partialSold?' (breakeven)':' (algne stop)'}</span></div>
+          ${(a.suggestedStop != null) ? `
+          <div class="ma-row" style="background:rgba(245,185,66,0.08);border-radius:4px;padding:8px 6px;margin:4px 0;border-bottom:none;">
+            <span class="k">Soovitatav uus stop <i style="color:var(--amber);font-style:normal;font-size:10px;">LISANDUS</i></span>
+            <span>
+              $${a.suggestedStop.toFixed(2)}
+              <button class="btn btn-ghost pos-use-suggested-stop" data-id="${p.id}" data-stop="${a.suggestedStop.toFixed(2)}" style="padding:2px 8px;font-size:11px;margin-left:8px;">Kasuta seda</button>
+            </span>
+          </div>
+          <div style="font-size:11px;color:var(--muted);margin:-2px 0 8px;">${a.suggestedStopReason || ''}</div>
+          ` : ''}
           <div class="notice show" style="margin-top:10px;">${a.actionHtml}</div>
         `;
       } else {
@@ -1712,6 +1794,21 @@
     const refreshOneBtn = e.target.closest('.pos-refresh-one');
     if(refreshOneBtn){
       refreshOnePosition(refreshOneBtn.dataset.id);
+      return;
+    }
+    const useStopBtn = e.target.closest('.pos-use-suggested-stop');
+    if(useStopBtn){
+      const id = useStopBtn.dataset.id;
+      const newStop = parseFloat(useStopBtn.dataset.stop);
+      if(!isNaN(newStop)){
+        const positions = loadPositions();
+        const pos = positions.find(p=>p.id===id);
+        if(pos){
+          pos.initialStop = newStop;
+          savePositionsToStorage(positions);
+          refreshOnePosition(id);
+        }
+      }
       return;
     }
     const header = e.target.closest('.pos-card-header');
