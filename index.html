@@ -1351,6 +1351,31 @@
     // üksinda kogu skoori nullida — seega on tegu sujuva mahaarvamisega, mitte kõva ülemise piiriga,
     // mis varem tekitas ootamatuid hüppeid (nt tugev setup langes ühtäkki 25 punktile).
     if(lowADR) score -= 15;
+
+    // ---- Peidetud turvavõrk: kaootilise "pump"-tüüpi mustri karistus. ----
+    // Neid ei kuvata kusagil UI-s (pole eraldi välja, veergu ega hoiatust) — need lihtsalt
+    // mõjutavad skoori vaikselt taustal, et eristada institutsionaalse kvaliteediga leaderit
+    // (kõrge skoor õigustatult) kaootilisest mikro-cap "pump" liikumisest (nt FCUV-tüüpi
+    // 500%+ ühepäevane hüpe ilma baasita), mis muidu koguks kõrgeid punkte ainuüksi
+    // momendi/mahu/breakout'i komponentidest.
+
+    // 1. Erakordselt kõrge ADR — normaalne "hea" ADR on tavaliselt 3.5–15% vahel; selle ületamine
+    // viitab sageli õhukesele free float'ile / manipuleeritavale mikro-cap'ile.
+    const extremeADR = adrPct > 15;
+    if(extremeADR) score -= 20;
+
+    // 2. Suur liikumine, aga PUUDUB korrastatud baas — klassikaline "pump"-signatuur.
+    const bigMoveNoBase = (pctMove1M > 100 || (pctMove3M!==null && pctMove3M > 150)) && !properConsolidation;
+    if(bigMoveNoBase) score -= 25;
+
+    // 3. Ekstreemne kõrgeim-madalaim vahemik kogu ajaloolises aknas — suur kordaja viitab
+    // metsikule tõusule-langusele, mitte stabiilsele "stairstep" liikumisele.
+    const overallHigh = Math.max(...highs);
+    const overallLow = Math.min(...lows);
+    const rangeRatio = overallLow > 0 ? overallHigh / overallLow : 0;
+    const extremeRange = rangeRatio > 15;
+    if(extremeRange) score -= 15;
+
     score = Math.round(Math.max(0, Math.min(100, score)));
 
     const dayLowStop = last.l;
