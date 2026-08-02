@@ -343,6 +343,10 @@
         <input type="number" id="candidateCount" value="10" min="5" max="20" />
       </div>
       <button class="btn btn-ghost" id="scanBtn" disabled>Skanni turgu</button>
+      <label style="font-size:11px;color:var(--muted);display:flex;align-items:center;gap:5px;cursor:pointer;">
+        <input type="checkbox" id="showRedToggle" />
+        Näita ka punaseid (skoor &lt; 30 — nagunii mitte ostetavad)
+      </label>
       <div style="font-size:11px;color:var(--muted)">Tasuta API tasemed on kiiruspiiratud — skann võtab kandidaadi kohta ~20-30 sek (Polygon'iga lisandub sektori info päring).</div>
     </div>
 
@@ -365,6 +369,7 @@
     </div>
 
     <div class="progress" id="scanProgress"></div>
+    <div style="font-size:11px;color:var(--muted);margin-bottom:8px;" id="hiddenRedNote"></div>
 
     <table id="resultsTable" style="display:none;">
       <thead>
@@ -570,6 +575,37 @@
       <div class="notice show" id="psAction" style="margin-top:14px;"></div>
     </div>
     <div class="empty" id="psEmpty">Sisesta konto suurus, riskiprotsent, sisenemishind ja stop, seejärel vajuta "Arvuta positsioon".</div>
+  </section>
+
+  <!-- BLOCK 5: WATCHLIST -->
+  <section class="block">
+    <div class="block-head">
+      <div>
+        <div class="eyebrow">Plokk 05 · Watchlist</div>
+        <h2>⭐ Watchlist — jälgi huvipakkuvaid aktsiaid</h2>
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;">
+        <button class="btn btn-ghost" id="wlRefreshAllBtn">Värskenda kõik</button>
+      </div>
+    </div>
+
+    <div class="config" style="margin-bottom:16px;">
+      <div class="field">
+        <label>Ticker</label>
+        <input type="text" id="wlSymInput" placeholder="nt NVDA" style="text-transform:uppercase;" />
+      </div>
+      <div class="field" style="flex:2;">
+        <label>Märkus (valikuline)</label>
+        <input type="text" id="wlNoteInput" placeholder="nt murdis baasist välja, ootan retest'i" />
+      </div>
+      <button class="btn" id="wlAddBtn">+ Lisa watchlisti</button>
+    </div>
+
+    <div style="font-size:11px;color:var(--muted);margin-bottom:10px;">Skanneri tulemuste tabelis saad tickeri kõrval oleva ☆ nupuga lisada leitud aktsiad otse siia. Watchlisti aktsiad ei arvesta sisenemis-/väljumishinda — need on lihtsalt jälgimiseks, kuni otsustad, kas ja millal osta.</div>
+
+    <div class="progress" id="watchlistProgress"></div>
+    <div id="watchlistList"></div>
+    <div class="empty" id="watchlistEmpty">Watchlist on tühi. Lisa ticker ülal olevast väljast, või vajuta skanneri tulemuste tabelis tickeri kõrval olevat ☆ nuppu.</div>
   </section>
 
   <footer>
@@ -1335,29 +1371,40 @@
     return {cls:'red', text:'Punane'};
   }
 
+  let lastScanResults = [];
+
   function renderResults(rows){
+    lastScanResults = rows;
+    const showRed = $('showRedToggle').checked;
+    const visibleRows = showRed ? rows : rows.filter(({a}) => trafficLight(a.score).cls !== 'red');
+    const hiddenCount = rows.length - visibleRows.length;
+
     const tbody = $('resultsBody');
     tbody.innerHTML='';
-    if(!rows.length){
+    if(!visibleRows.length){
       $('resultsTable').style.display='none';
       $('scanLegend').style.display='none';
       $('resultsEmpty').style.display='block';
-      $('resultsEmpty').textContent = 'Skann ei leidnud sobivaid kandidaate praeguste kriteeriumidega.';
+      $('hiddenRedNote').textContent = '';
+      $('resultsEmpty').textContent = rows.length
+        ? `Kõik ${rows.length} leitud kandidaati said punase (skoor < 30) — pole hetkel ostetavaid setup'e. Märgi "Näita ka punaseid", kui soovid neid siiski näha.`
+        : 'Skann ei leidnud sobivaid kandidaate praeguste kriteeriumidega.';
       return;
     }
     $('resultsTable').style.display='table';
     $('scanLegend').style.display='flex';
     $('resultsEmpty').style.display='none';
 
-    rows.sort((a,b)=>b.a.score-a.a.score);
-    rows.forEach(({sym,a,sector,rs})=>{
+    visibleRows.sort((a,b)=>b.a.score-a.a.score);
+    $('hiddenRedNote').textContent = hiddenCount ? `${hiddenCount} punane (skoor < 30, nagunii mitte ostetav) tulemus on peidetud.` : '';
+    visibleRows.forEach(({sym,a,sector,rs})=>{
       const tr = document.createElement('tr');
       const tl = trafficLight(a.score);
       const fmtPct = v => v===null ? 'N/A' : ((v>=0?'+':'')+v.toFixed(1)+'%');
       const pctClass = v => v===null ? '' : (v>=0?'pos':'neg');
       tr.innerHTML = `
         <td><span class="tl"><span class="tl-dot ${tl.cls}"></span><span class="tl-text ${tl.cls}">${tl.text}</span></span></td>
-        <td class="tk" data-sym="${sym}" style="cursor:pointer;text-decoration:underline dotted;" title="Klõpsa graafiku vaatamiseks">${sym}</td>
+        <td><span class="tk" data-sym="${sym}" style="cursor:pointer;text-decoration:underline dotted;" title="Klõpsa graafiku vaatamiseks">${sym}</span> <button class="wl-add-btn" data-sym="${sym}" title="Lisa watchlisti" style="background:none;border:none;color:var(--amber);cursor:pointer;font-size:13px;padding:0 2px;vertical-align:middle;">☆</button></td>
         <td style="font-size:11px;color:var(--muted);max-width:140px;">${sector || 'N/A'}</td>
         <td>$${a.price.toFixed(2)}</td>
         <td class="${pctClass(a.pctMove1M)}">${fmtPct(a.pctMove1M)}</td>
@@ -1471,6 +1518,7 @@
   apikeyInput.addEventListener('input', ()=>{ if(rememberBox.checked) saveKey(); });
   providerSel.addEventListener('change', ()=>{ if(rememberBox.checked) saveKey(); });
   scanBtn.addEventListener('click', runScan);
+  $('showRedToggle').addEventListener('change', ()=>{ if(lastScanResults.length) renderResults(lastScanResults); });
 
   // ---------- BLOCK 3: Exit strategy ----------
   function businessDaysBetween(d1, d2){
@@ -1904,6 +1952,206 @@
   $('refreshAllPositionsBtn').addEventListener('click', refreshAllPositions);
   renderPositionsList();
 
+  // ---------- BLOCK 5: Watchlist ----------
+  // Lihtne jälgimisnimekiri leitud/huvipakkuvate aktsiate jaoks — erinevalt "Salvestatud
+  // positsioonidest" (Plokk 3) ei eelda see, et oled aktsia juba ostnud: siia saab lisada
+  // tickereid, mida soovid lihtsalt aja jooksul jälgida (skoor, foor, struktuur), enne kui
+  // otsustad, kas ja millal sisenda.
+  const WATCHLIST_KEY = 'tape-and-base:watchlist';
+  let expandedWatchlistId = null;
+
+  function loadWatchlist(){
+    try{ return JSON.parse(localStorage.getItem(WATCHLIST_KEY)) || []; }catch(e){ return []; }
+  }
+  function saveWatchlistToStorage(arr){
+    try{ localStorage.setItem(WATCHLIST_KEY, JSON.stringify(arr)); }catch(e){ console.error('Watchlisti salvestamine ebaõnnestus:', e); }
+  }
+  function setWatchlistProgress(text, pct){
+    $('watchlistProgress').innerHTML = text + `<div class="bar"><i style="width:${pct}%"></i></div>`;
+  }
+
+  function addToWatchlist(sym, note){
+    sym = (sym||'').trim().toUpperCase();
+    if(!sym){ alert('Sisesta ticker.'); return; }
+    const list = loadWatchlist();
+    if(list.some(w=>w.sym===sym)){
+      alert(sym + ' on juba watchlistis.');
+      return;
+    }
+    list.unshift({
+      id: Date.now().toString(36) + Math.random().toString(36).slice(2,7),
+      sym, note: note || '', addedAt: new Date().toISOString(),
+      lastAnalysis: null, lastError: null, lastCheckedAt: null
+    });
+    saveWatchlistToStorage(list);
+    renderWatchlist();
+    if(apikeyInput.value.trim()) refreshOneWatchlistItem(list[0].id);
+  }
+
+  function renderWatchlist(){
+    const list = loadWatchlist();
+    const container = $('watchlistList');
+    container.innerHTML = '';
+
+    if(!list.length){
+      $('watchlistEmpty').style.display = 'block';
+      return;
+    }
+    $('watchlistEmpty').style.display = 'none';
+
+    list.forEach(w=>{
+      const isOpen = expandedWatchlistId === w.id;
+      const a = w.lastAnalysis;
+      const tl = a ? trafficLight(a.score) : {cls:'yellow', text:'Pole kontrollitud'};
+      const addedDate = new Date(w.addedAt).toLocaleDateString('et-EE');
+      const checkedTxt = w.lastCheckedAt ? ('Viimati kontrollitud: ' + new Date(w.lastCheckedAt).toLocaleString('et-EE')) : 'Pole veel kontrollitud';
+
+      const editRow = `
+        <div style="display:flex;gap:16px;flex-wrap:wrap;align-items:center;padding:10px 0;border-bottom:1px dashed var(--line);margin-bottom:8px;">
+          <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--muted);font-weight:normal;text-transform:none;letter-spacing:0;flex:1;min-width:200px;">
+            Märkus:
+            <input type="text" class="wl-note-edit" data-id="${w.id}" value="${(w.note||'').replace(/"/g,'&quot;')}" placeholder="nt ootan retest'i" style="flex:1;background:var(--panel-2);border:1px solid var(--line);color:var(--text);padding:4px 6px;border-radius:4px;font-family:inherit;font-size:12px;" />
+          </label>
+          <button class="btn btn-ghost wl-refresh-one" data-id="${w.id}" style="padding:4px 10px;font-size:11px;">Värskenda seda</button>
+        </div>
+      `;
+
+      let bodyHtml;
+      if(a){
+        bodyHtml = editRow + `
+          <div class="ma-row"><span class="k">Praegune hind</span><span>$${a.price.toFixed(2)}</span></div>
+          <div class="ma-row"><span class="k">1-kuu %</span><span class="${a.pctMove1M>=0?'pos':'neg'}">${(a.pctMove1M>=0?'+':'')+a.pctMove1M.toFixed(1)}%</span></div>
+          <div class="ma-row"><span class="k">3-kuu %</span><span class="${a.pctMove3M===null?'':(a.pctMove3M>=0?'pos':'neg')}">${a.pctMove3M===null?'N/A':((a.pctMove3M>=0?'+':'')+a.pctMove3M.toFixed(1)+'%')}</span></div>
+          <div class="ma-row"><span class="k">ADR%</span><span class="${a.lowADR?'neg':''}">${a.adrPct.toFixed(1)}%${a.lowADR?' ⚠':''}</span></div>
+          <div class="ma-row"><span class="k">Maht vs 20p keskm.</span><span>${a.volRatio.toFixed(2)}x</span></div>
+          <div class="ma-row"><span class="k">Struktuur</span><span>${a.narrowing?'kitseneb ':''}${a.higherLows?'/ kõrgemad madalp.':''}${(!a.narrowing && !a.higherLows)?'—':''} · ${a.strongCandle?'💪 tugev küünal':(a.decentCandle?'küünal ok':'küünal nõrk')} · ${a.sma50===null?'50p SMA: N/A':(a.aboveSMA50?'📐 >50p SMA':'<50p SMA')}</span></div>
+          <div class="ma-row"><span class="k">Setup skoor</span><span><span class="score-bar"><i style="width:${a.score}%"></i></span>${a.score}</span></div>
+          <div class="ma-row"><span class="k">Soovituslik sisenemine / stop</span><span>$${a.entry.toFixed(2)} / $${a.stop.toFixed(2)}</span></div>
+          <div style="font-size:11px;color:var(--muted);margin-top:8px;">${checkedTxt}</div>
+        `;
+      } else {
+        bodyHtml = editRow + `<div style="color:var(--muted);font-size:12px;padding:10px 0;">${w.lastError || 'Vajuta "Värskenda seda" või "Värskenda kõik", et analüüsida.'}</div>`;
+      }
+
+      const card = document.createElement('div');
+      card.className = 'pos-card';
+      card.innerHTML = `
+        <div class="pos-card-header" data-id="${w.id}">
+          <div class="pos-card-title">
+            <span class="pos-card-arrow ${isOpen?'open':''}">▶</span>
+            <span class="tk" data-sym="${w.sym}" style="cursor:pointer;text-decoration:underline dotted;" title="Klõpsa graafiku vaatamiseks">${w.sym}</span>
+            <span class="tl"><span class="tl-dot ${tl.cls}"></span><span class="tl-text ${tl.cls}">${tl.text}</span></span>
+            <span style="font-size:11px;color:var(--muted);">lisatud ${addedDate}</span>
+          </div>
+          <button class="pos-card-remove" data-remove="${w.id}" title="Kustuta">✕</button>
+        </div>
+        <div class="pos-card-body ${isOpen?'open':''}">${bodyHtml}</div>
+      `;
+      container.appendChild(card);
+    });
+  }
+
+  async function refreshOneWatchlistItem(id){
+    const provider = providerSel.value;
+    const key = apikeyInput.value.trim();
+    if(!key){ alert('Sisesta oma API võti.'); return; }
+    if(provider === 'finnhub'){ alert('Finnhub tasuta tase ei anna ajaloolisi küünlaid — vali Polygon või Alpha Vantage.'); return; }
+
+    let list = loadWatchlist();
+    const w = list.find(x=>x.id===id);
+    if(!w) return;
+
+    try{
+      const bars = provider==='polygon' ? await polygonDaily(w.sym, key, 220) : await alphaDaily(w.sym, key, false);
+      w.lastAnalysis = analyze(bars);
+      w.lastError = w.lastAnalysis ? null : 'Liiga vähe ajaloolisi andmepunkte selle tickeri jaoks.';
+    }catch(e){
+      w.lastAnalysis = null;
+      w.lastError = e.message;
+    }
+    w.lastCheckedAt = new Date().toISOString();
+    saveWatchlistToStorage(list);
+    renderWatchlist();
+  }
+
+  async function refreshAllWatchlist(){
+    const provider = providerSel.value;
+    const key = apikeyInput.value.trim();
+    if(!key){ alert('Sisesta oma API võti.'); return; }
+    if(provider === 'finnhub'){ alert('Finnhub tasuta tase ei anna ajaloolisi küünlaid — vali Polygon või Alpha Vantage.'); return; }
+
+    const refreshBtn = $('wlRefreshAllBtn');
+    let list = loadWatchlist();
+    if(!list.length) return;
+
+    refreshBtn.disabled = true;
+    for(let i=0;i<list.length;i++){
+      const w = list[i];
+      setWatchlistProgress(`Värskendan ${w.sym}… (${i+1}/${list.length})`, (i/list.length)*100);
+      try{
+        const bars = provider==='polygon' ? await polygonDaily(w.sym, key, 220) : await alphaDaily(w.sym, key, false);
+        w.lastAnalysis = analyze(bars);
+        w.lastError = w.lastAnalysis ? null : 'Liiga vähe ajaloolisi andmepunkte selle tickeri jaoks.';
+      }catch(e){
+        w.lastAnalysis = null;
+        w.lastError = e.message;
+      }
+      w.lastCheckedAt = new Date().toISOString();
+    }
+    saveWatchlistToStorage(list);
+    setWatchlistProgress('Valmis.', 100);
+    renderWatchlist();
+    refreshBtn.disabled = false;
+  }
+
+  $('wlAddBtn').addEventListener('click', ()=>{
+    addToWatchlist($('wlSymInput').value, $('wlNoteInput').value);
+    $('wlSymInput').value = '';
+    $('wlNoteInput').value = '';
+  });
+  $('wlSymInput').addEventListener('keydown', (e)=>{ if(e.key==='Enter') $('wlAddBtn').click(); });
+
+  $('watchlistList').addEventListener('click', (e)=>{
+    const removeBtn = e.target.closest('[data-remove]');
+    if(removeBtn){
+      const id = removeBtn.dataset.remove;
+      const list = loadWatchlist().filter(w=>w.id !== id);
+      saveWatchlistToStorage(list);
+      if(expandedWatchlistId === id) expandedWatchlistId = null;
+      renderWatchlist();
+      return;
+    }
+    const refreshOneBtn = e.target.closest('.wl-refresh-one');
+    if(refreshOneBtn){
+      refreshOneWatchlistItem(refreshOneBtn.dataset.id);
+      return;
+    }
+    const tk = e.target.closest('.tk');
+    if(tk && tk.dataset.sym){ showChart(tk.dataset.sym); return; }
+    const header = e.target.closest('.pos-card-header');
+    if(header){
+      const id = header.dataset.id;
+      expandedWatchlistId = (expandedWatchlistId === id) ? null : id;
+      renderWatchlist();
+    }
+  });
+
+  $('watchlistList').addEventListener('change', (e)=>{
+    const noteEdit = e.target.closest('.wl-note-edit');
+    if(noteEdit){
+      const id = noteEdit.dataset.id;
+      const list = loadWatchlist();
+      const w = list.find(x=>x.id===id);
+      if(w){
+        w.note = noteEdit.value;
+        saveWatchlistToStorage(list);
+      }
+    }
+  });
+
+  $('wlRefreshAllBtn').addEventListener('click', refreshAllWatchlist);
+  renderWatchlist();
+
   // ---------- BLOCK 4: Position sizing ----------
   function setPsVerdict(kind, label, sub){
     const box = $('psVerdictBox');
@@ -2053,6 +2301,11 @@
   }
 
   $('resultsBody').addEventListener('click', (e)=>{
+    const wlBtn = e.target.closest('.wl-add-btn');
+    if(wlBtn && wlBtn.dataset.sym){
+      addToWatchlist(wlBtn.dataset.sym, '');
+      return;
+    }
     const td = e.target.closest('.tk');
     if(td && td.dataset.sym) showChart(td.dataset.sym);
   });
