@@ -228,10 +228,8 @@
         </div>
         <div class="ma-row"><span class="k">Sulgemishind</span><span id="QQQ-lastClose">—</span></div>
         <div class="ma-row"><span class="k">10p EMA</span><span id="QQQ-ema10">—</span></div>
-        <div class="ma-row"><span class="k">21p SMA</span><span id="QQQ-sma21">—</span></div>
+        <div class="ma-row"><span class="k">21p EMA</span><span id="QQQ-ema21">—</span></div>
         <div class="ma-row"><span class="k">50p SMA</span><span id="QQQ-sma50">—</span></div>
-        <div class="ma-row"><span class="k">65p SMA</span><span id="QQQ-sma65">—</span></div>
-        <div class="ma-row"><span class="k">200p SMA</span><span id="QQQ-sma200">—</span></div>
         <div class="ma-row"><span class="k">Vahe (Kullamägi: hind vs kõik keskmised)</span><span id="QQQ-smaGap">—</span></div>
         <div class="chart-wrap" id="QQQ-chartWrap"></div>
         <div style="font-size:11px;color:var(--bear);margin-top:6px;" id="QQQ-error"></div>
@@ -243,10 +241,8 @@
         </div>
         <div class="ma-row"><span class="k">Sulgemishind</span><span id="SPY-lastClose">—</span></div>
         <div class="ma-row"><span class="k">10p EMA</span><span id="SPY-ema10">—</span></div>
-        <div class="ma-row"><span class="k">21p SMA</span><span id="SPY-sma21">—</span></div>
+        <div class="ma-row"><span class="k">21p EMA</span><span id="SPY-ema21">—</span></div>
         <div class="ma-row"><span class="k">50p SMA</span><span id="SPY-sma50">—</span></div>
-        <div class="ma-row"><span class="k">65p SMA</span><span id="SPY-sma65">—</span></div>
-        <div class="ma-row"><span class="k">200p SMA</span><span id="SPY-sma200">—</span></div>
         <div class="ma-row"><span class="k">Vahe (Kullamägi: hind vs kõik keskmised)</span><span id="SPY-smaGap">—</span></div>
         <div class="chart-wrap" id="SPY-chartWrap"></div>
         <div style="font-size:11px;color:var(--bear);margin-top:6px;" id="SPY-error"></div>
@@ -258,10 +254,8 @@
         </div>
         <div class="ma-row"><span class="k">Sulgemishind</span><span id="ONEQ-lastClose">—</span></div>
         <div class="ma-row"><span class="k">10p EMA</span><span id="ONEQ-ema10">—</span></div>
-        <div class="ma-row"><span class="k">21p SMA</span><span id="ONEQ-sma21">—</span></div>
+        <div class="ma-row"><span class="k">21p EMA</span><span id="ONEQ-ema21">—</span></div>
         <div class="ma-row"><span class="k">50p SMA</span><span id="ONEQ-sma50">—</span></div>
-        <div class="ma-row"><span class="k">65p SMA</span><span id="ONEQ-sma65">—</span></div>
-        <div class="ma-row"><span class="k">200p SMA</span><span id="ONEQ-sma200">—</span></div>
         <div class="ma-row"><span class="k">Vahe (Kullamägi: hind vs kõik keskmised)</span><span id="ONEQ-smaGap">—</span></div>
         <div class="chart-wrap" id="ONEQ-chartWrap"></div>
         <div style="font-size:11px;color:var(--bear);margin-top:6px;" id="ONEQ-error"></div>
@@ -273,10 +267,8 @@
         </div>
         <div class="ma-row"><span class="k">Sulgemishind</span><span id="IWM-lastClose">—</span></div>
         <div class="ma-row"><span class="k">10p EMA</span><span id="IWM-ema10">—</span></div>
-        <div class="ma-row"><span class="k">21p SMA</span><span id="IWM-sma21">—</span></div>
+        <div class="ma-row"><span class="k">21p EMA</span><span id="IWM-ema21">—</span></div>
         <div class="ma-row"><span class="k">50p SMA</span><span id="IWM-sma50">—</span></div>
-        <div class="ma-row"><span class="k">65p SMA</span><span id="IWM-sma65">—</span></div>
-        <div class="ma-row"><span class="k">200p SMA</span><span id="IWM-sma200">—</span></div>
         <div class="ma-row"><span class="k">Vahe (Kullamägi: hind vs kõik keskmised)</span><span id="IWM-smaGap">—</span></div>
         <div class="chart-wrap" id="IWM-chartWrap"></div>
         <div style="font-size:11px;color:var(--bear);margin-top:6px;" id="IWM-error"></div>
@@ -964,38 +956,32 @@
 
   async function loadOneIndex(symbol, provider, key){
     setIndexTL(symbol, 'idle', 'LAEN…');
-    // 400 kauplemispäeva tagab piisavalt ajalugu ka 200p SMA jaoks (vajab 200 baari + veidi puhvrit).
-    const bars = provider === 'polygon' ? await polygonDaily(symbol, key, 400) : await alphaDaily(symbol, key, true);
-    if(bars.length < 21) throw new Error(symbol + ': liiga vähe andmepunkte 20p SMA jaoks.');
+    // Kullamägi enda meetod kasutab ainult 3 keskmist (10p/21p EMA + 50p SMA), nii et
+    // pikka ajalugu (200p SMA jaoks) enam vaja pole — piisab ~100-150 päevast.
+    const bars = provider === 'polygon' ? await polygonDaily(symbol, key, 150) : await alphaDaily(symbol, key, false);
+    if(bars.length < 21) throw new Error(symbol + ': liiga vähe andmepunkte 21p EMA jaoks.');
 
     const closes = bars.map(b=>b.c);
     const last = closes[closes.length-1];
 
-    // Kullamägi lähenemine: hind peab olema ÜLE (või ALLA) kõigi võtmeliste päevaste
-    // keskmiste korraga — 10p EMA, 21p, 50p, 65p ja 200p SMA. See on rangem test kui
-    // pelgalt kahe lühikese keskmise omavaheline vahe.
+    // Kullamägi enda avalikult kirjeldatud meetod: 10p EMA, 21p EMA ja 50p SMA — kõik kolm
+    // eksponentsiaalsed lühemad keskmised (kiirem reaktsioon värsketele hindadele) + lihtne
+    // 50p keskmine, mis eraldab tema sõnul "tugevad tõusutrendid kõigest muust".
     const e10 = ema(closes, 10);
-    const s21 = closes.length>=21 ? sma(closes,21) : null;
+    const e21 = ema(closes, 21);
     const s50 = closes.length>=50 ? sma(closes,50) : null;
-    const s65 = closes.length>=65 ? sma(closes,65) : null;
-    const s200 = closes.length>=200 ? sma(closes,200) : null;
 
     $(symbol+'-lastClose').textContent = last.toFixed(2);
     $(symbol+'-ema10').textContent = e10!==null ? e10.toFixed(2) : 'N/A';
-    $(symbol+'-sma21').textContent = s21!==null ? s21.toFixed(2) : 'N/A';
+    $(symbol+'-ema21').textContent = e21!==null ? e21.toFixed(2) : 'N/A';
     $(symbol+'-sma50').textContent = s50!==null ? s50.toFixed(2) : 'N/A (liiga vähe ajalugu)';
-    $(symbol+'-sma65').textContent = s65!==null ? s65.toFixed(2) : 'N/A (liiga vähe ajalugu)';
-    $(symbol+'-sma200').textContent = s200!==null ? s200.toFixed(2) : 'N/A (liiga vähe ajalugu)';
     renderChart(bars.slice(-252), symbol+'-chartWrap'); // ~12 kuud (252 kauplemispäeva)
 
-    // Kõik olemasolevad keskmised (mõned võivad puududa, kui ajalugu napib — nt 200p SMA
-    // uuemate ETF-ide/aktsiate puhul). Otsus tehakse ainult nende keskmiste põhjal, mis on
-    // reaalselt arvutatavad.
-    const availableMAs = [e10, s21, s50, s65, s200].filter(v => v !== null);
+    // Kõik olemasolevad keskmised (50p SMA võib puududa, kui ajalugu napib).
+    const availableMAs = [e10, e21, s50].filter(v => v !== null);
     const aboveCount = availableMAs.filter(ma => last > ma).length;
     const belowCount = availableMAs.filter(ma => last < ma).length;
 
-    // "Vahe" näitab nüüd, mitu keskmist hind ületab (mitte enam kahe lühikese SMA protsentuaalset vahet).
     $(symbol+'-smaGap').textContent = aboveCount + ' / ' + availableMAs.length + ' üle';
 
     let kind;
