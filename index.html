@@ -293,11 +293,42 @@
             <th>3-kuu %</th>
             <th>Trend (10p vs 20p)</th>
             <th>Staatus</th>
+            <th></th>
           </tr>
         </thead>
         <tbody id="sectorBody"></tbody>
       </table>
       <div class="empty" id="sectorEmpty">Vajuta "Vaata sektoreid", et näha, millised sektorid on hetkel kuumad.</div>
+
+      <div id="sectorStocksWrap" style="display:none;margin-top:20px;padding-top:16px;border-top:1px dashed var(--line);">
+        <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:10px;">
+          <div>
+            <div class="eyebrow" id="sectorStocksTitle">Sektori aktsiad</div>
+            <div style="font-size:11px;color:var(--muted);margin-top:2px;">Sama Kullamägi-tüüpi kriteeriumid ja setup-skoor, mis Ploki 02 skanneris — läbi käiakse turu 80 tugevaimat liidrit ja filtreeritakse valitud sektorile.</div>
+          </div>
+          <button class="btn btn-ghost" id="sectorStocksCloseBtn" style="padding:4px 10px;font-size:11px;">✕ Sulge</button>
+        </div>
+        <div class="progress" id="sectorStocksProgress"></div>
+        <table id="sectorStocksTable" style="display:none;">
+          <thead>
+            <tr>
+              <th>Ticker</th>
+              <th>Hind</th>
+              <th>1-kuu %</th>
+              <th>3-kuu %</th>
+              <th>ADR%</th>
+              <th>Maht vs 20p keskm.</th>
+              <th>RS (vs sektor)</th>
+              <th>Struktuur</th>
+              <th>Setup skoor</th>
+              <th>Sisenemine</th>
+              <th>Stop</th>
+            </tr>
+          </thead>
+          <tbody id="sectorStocksBody"></tbody>
+        </table>
+        <div class="empty" id="sectorStocksEmpty" style="display:none;"></div>
+      </div>
     </div>
 
     <div style="margin-top:20px;padding-top:16px;border-top:1px dashed var(--line);">
@@ -1117,6 +1148,7 @@
         <td class="${pctCls(r.pct3M)}">${fmtPct(r.pct3M)}</td>
         <td>${r.trendUp ? '🔼 tõusev' : '🔽 langev'}</td>
         <td><span class="tl"><span class="tl-dot ${statusCls}"></span><span class="tl-text ${statusCls}">${statusTxt}</span></span></td>
+        <td><button class="btn btn-ghost sector-view-stocks" data-sector="${r.name}" style="padding:3px 8px;font-size:10.5px;white-space:nowrap;">Vaata sektori aktsiaid</button></td>
       `;
       tbody.appendChild(tr);
     });
@@ -1168,6 +1200,112 @@
 
   $('sectorBtn').addEventListener('click', runSectorScan);
   $('sectorBody').addEventListener('click', (e)=>{
+    const viewBtn = e.target.closest('.sector-view-stocks');
+    if(viewBtn && viewBtn.dataset.sector){
+      runSectorStockScan(viewBtn.dataset.sector);
+      return;
+    }
+    const td = e.target.closest('.tk');
+    if(td && td.dataset.sym) showChart(td.dataset.sym);
+  });
+
+  // ---------- Ühe sektori aktsiad (kasutab sama analyze()/Kullamägi kriteeriume, mis Plokk 02) ----------
+  const SECTOR_STOCKS_POOL_SIZE = 80; // läbi käidavate turu tugevaimate liidrite hulk enne sektori järgi filtreerimist
+
+  function setSectorStocksProgress(text, pct){
+    $('sectorStocksProgress').innerHTML = text + `<div class="bar"><i style="width:${pct}%"></i></div>`;
+  }
+
+  function renderSectorStocksTable(rows, sectorName){
+    $('sectorStocksTitle').textContent = 'Sektori aktsiad — ' + sectorName;
+    const tbody = $('sectorStocksBody');
+    tbody.innerHTML = '';
+
+    if(!rows.length){
+      $('sectorStocksTable').style.display = 'none';
+      $('sectorStocksEmpty').style.display = 'block';
+      $('sectorStocksEmpty').textContent = `Turu ${SECTOR_STOCKS_POOL_SIZE} tugevaima liidri seast ei leidunud ühtegi "${sectorName}" sektori aktsiat. See ei tähenda, et sektoris pole ühtegi head aktsiat — lihtsalt ükski neist ei ole hetkel turu laiema momentumi liidrite hulgas.`;
+      return;
+    }
+    $('sectorStocksTable').style.display = 'table';
+    $('sectorStocksEmpty').style.display = 'none';
+
+    rows.sort((a,b)=>b.a.score-a.a.score);
+    rows.forEach(({sym,a,rs})=>{
+      const tr = document.createElement('tr');
+      const fmtPct = v => v===null ? 'N/A' : ((v>=0?'+':'')+v.toFixed(1)+'%');
+      const pctCls = v => v===null ? '' : (v>=0?'pos':'neg');
+      tr.innerHTML = `
+        <td><span class="tk" data-sym="${sym}" style="cursor:pointer;text-decoration:underline dotted;">${sym}</span> <button class="wl-add-btn" data-sym="${sym}" title="Lisa watchlisti" style="background:none;border:none;color:var(--amber);cursor:pointer;font-size:13px;padding:0 2px;vertical-align:middle;">☆</button></td>
+        <td>$${a.price.toFixed(2)}</td>
+        <td class="${pctCls(a.pctMove1M)}">${fmtPct(a.pctMove1M)}</td>
+        <td class="${pctCls(a.pctMove3M)}">${fmtPct(a.pctMove3M)}</td>
+        <td class="${a.lowADR?'neg':''}">${a.adrPct.toFixed(1)}%${a.lowADR?' ⚠':''}</td>
+        <td>${a.volRatio.toFixed(2)}x</td>
+        <td class="${rs==null?'':(rs>=0?'pos':'neg')}">${rs==null ? 'N/A' : ((rs>=0?'+':'')+rs.toFixed(1)+'%')}</td>
+        <td style="font-size:10.5px;">${a.narrowing?'kitseneb ':''}${a.higherLows?'/ kõrgemad madalp.':''}${(!a.narrowing && !a.higherLows)?'—':''}<br>${a.strongCandle?'💪 tugev küünal':(a.decentCandle?'küünal ok':'küünal nõrk')} · ${a.sma50===null?'50p SMA: N/A':(a.aboveSMA50?'📐 >50p SMA':'&lt;50p SMA')}</td>
+        <td><span class="score-bar"><i style="width:${a.score}%"></i></span>${a.score}</td>
+        <td>$${a.entry.toFixed(2)}</td>
+        <td>$${a.stop.toFixed(2)}</td>
+      `;
+      tbody.appendChild(tr);
+    });
+  }
+
+  async function runSectorStockScan(sectorName){
+    const provider = providerSel.value;
+    const key = apikeyInput.value.trim();
+    if(!key){ alert('Sisesta oma API võti.'); return; }
+    if(provider !== 'polygon'){
+      alert('Sektori aktsiate vaade nõuab Polygon\'i — sektori tuvastus (SIC kood) pole Alpha Vantage\'iga võimalik.');
+      return;
+    }
+
+    $('sectorStocksWrap').style.display = 'block';
+    $('sectorStocksWrap').scrollIntoView({behavior:'smooth', block:'nearest'});
+    $('sectorStocksTitle').textContent = 'Sektori aktsiad — ' + sectorName;
+    $('sectorStocksTable').style.display = 'none';
+    $('sectorStocksEmpty').style.display = 'none';
+
+    const matches = [];
+    try{
+      setSectorStocksProgress(`Tõmban turu ${SECTOR_STOCKS_POOL_SIZE} tugevaimat liidrit…`, 0);
+      const leaders = await polygonMultiMonthLeaders(key, SECTOR_STOCKS_POOL_SIZE);
+
+      for(let i=0;i<leaders.length;i++){
+        const sym = leaders[i].sym;
+        setSectorStocksProgress(`Kontrollin ${sym} sektorit ja struktuuri… (${i+1}/${leaders.length})`, (i/leaders.length)*100);
+        try{
+          const sector = await polygonTickerDetails(sym, key);
+          if(sector !== sectorName) continue; // pole see sektor — jäta vahele, ei kuluta analyze() peale aega
+
+          const bars = await polygonDaily(sym, key, 220);
+          const a = analyze(bars);
+          if(!a) continue;
+
+          const rs = computeRS(a.pctMove1M, sector);
+          if(rs !== null && rs > 0){
+            a.score = Math.round(Math.max(0, Math.min(100, a.score + Math.min(10, rs))));
+          }
+          matches.push({sym, a, rs});
+        }catch(e){ /* üksik ticker ebaõnnestus — jätka teistega */ }
+      }
+    }catch(e){
+      setSectorStocksProgress('Viga: ' + e.message, 0);
+      return;
+    }
+
+    setSectorStocksProgress(`Valmis. Leiti ${matches.length} "${sectorName}" sektori aktsiat ${SECTOR_STOCKS_POOL_SIZE} kontrollitud liidri seast.`, 100);
+    renderSectorStocksTable(matches, sectorName);
+  }
+
+  $('sectorStocksCloseBtn').addEventListener('click', ()=>{ $('sectorStocksWrap').style.display = 'none'; });
+  $('sectorStocksBody').addEventListener('click', (e)=>{
+    const wlBtn = e.target.closest('.wl-add-btn');
+    if(wlBtn && wlBtn.dataset.sym){
+      addToWatchlist(wlBtn.dataset.sym, '');
+      return;
+    }
     const td = e.target.closest('.tk');
     if(td && td.dataset.sym) showChart(td.dataset.sym);
   });
